@@ -48,33 +48,40 @@ class EmailService:
             logger.error(f"Error sending email: {str(e)}")
             return False
     
-    def send_alert_email(self, recipient: str, subject: str, body: str) -> bool:
-        """Send a simple alert email (legacy method for backwards compatibility)."""
-        if not recipient or not recipient.strip():
-            logger.warning("No recipient specified")
+    def send_weekly_alerts(self, recipients: List[str], alerts: Dict[str, List]) -> bool:
+        """Send weekly alerts email (deforestation + land_cover)"""
+        if not any(alerts.values()):
+            logger.info("No weekly alerts to send")
             return False
-        return self.send_email([recipient.strip()], subject, body)
-
-    def send_weekly_digest(self, recipients: List[str], alerts: Dict[str, List], summary: Dict) -> bool:
-        """Send weekly digest email"""
-        template = self.jinja_env.get_template('weekly_digest.html')
+        
+        template = self.jinja_env.get_template('weekly_alerts.html')
+        
+        deforestation_count = len(alerts.get('deforestation', []))
+        land_cover_count = len(alerts.get('land_cover', []))
+        total_count = deforestation_count + land_cover_count
         
         html_content = template.render(
             alerts=alerts,
-            summary=summary,
-            has_alerts=summary['total_alerts'] > 0
+            deforestation_count=deforestation_count,
+            land_cover_count=land_cover_count,
+            total_count=total_count,
+            has_alerts=total_count > 0
         )
         
-        subject = f"📊 Resumen Semanal SIMBYP - {summary['generated_at']}"
+        subject = f"🌍 Alertas Semanales SIMBYP - Deforestación y Cambios de Cobertura"
         
         return self.send_email(recipients, subject, html_content)
     
-    def send_gfw_alert(self, recipients: List[str], alert_data: Dict) -> bool:
-        """Send individual GFW alert email"""
-        template = self.jinja_env.get_template('deforestation_alert.html')
+    def send_monthly_built_area(self, recipients: List[str], alert_data: Dict) -> bool:
+        """Send monthly built area alert email"""
+        if not alert_data:
+            logger.info("No built area alerts to send")
+            return False
+        
+        template = self.jinja_env.get_template('built_area_alert.html')
         
         html_content = template.render(alert=alert_data)
         
-        subject = f"🌳 {alert_data['title']}"
+        subject = f"🏗️ Reporte Mensual de Área Construida - SIMBYP"
         
         return self.send_email(recipients, subject, html_content)

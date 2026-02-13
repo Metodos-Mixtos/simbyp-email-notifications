@@ -12,18 +12,26 @@ class AlertProcessor:
         self.gcs = gcs_handler
         self.bucket = GCS_BUCKETS['reports']
     
-    def get_all_pending_alerts(self, days_back: int = DAYS_BACK) -> Dict[str, List]:
-        """Aggregate all alert types from the last N days"""
-        logger.info(f"Fetching alerts from the last {days_back} days")
+    def get_weekly_alerts(self, days_back: int = DAYS_BACK) -> Dict[str, List]:
+        """Get weekly alerts: deforestation (GFW) + land cover (PSA)"""
+        logger.info(f"Fetching weekly alerts from the last {days_back} days")
         
         alerts = {
-            'gfw': self.get_gfw_alerts(days_back),
-            'psa': self.get_psa_reports(days_back),
-            'area_construida': self.get_area_construida_alerts(days_back),
+            'deforestation': self.get_gfw_alerts(days_back),
+            'land_cover': self.get_psa_reports(days_back),
         }
         
         total_alerts = sum(len(v) for v in alerts.values())
-        logger.info(f"Total alerts found: {total_alerts}")
+        logger.info(f"Total weekly alerts found: {total_alerts}")
+        
+        return alerts
+    
+    def get_monthly_built_area(self, days_back: int = DAYS_BACK) -> List[Dict]:
+        """Get monthly built area alerts"""
+        logger.info(f"Fetching built area alerts from the last {days_back} days")
+        
+        alerts = self.get_area_construida_alerts(days_back)
+        logger.info(f"Total built area alerts found: {len(alerts)}")
         
         return alerts
     
@@ -54,7 +62,7 @@ class AlertProcessor:
         return processed_alerts
     
     def get_psa_reports(self, days_back: int) -> List[Dict]:
-        """Get PSA reports"""
+        """Get PSA reports (land cover / paramo)"""
         prefix = GCS_PREFIXES['psa']
         reports = self.gcs.list_recent_reports(self.bucket, prefix, days_back)
         
@@ -95,13 +103,3 @@ class AlertProcessor:
             processed_alerts.append(alert)
         
         return processed_alerts
-    
-    def get_summary_stats(self, alerts: Dict[str, List]) -> Dict:
-        """Generate summary statistics for all alerts"""
-        return {
-            'total_alerts': sum(len(v) for v in alerts.values()),
-            'gfw_count': len(alerts.get('gfw', [])),
-            'psa_count': len(alerts.get('psa', [])),
-            'area_construida_count': len(alerts.get('area_construida', [])),
-            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }

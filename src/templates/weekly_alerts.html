@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumen Semanal SIMBYP</title>
+    <title>Alertas Semanales SIMBYP</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -86,16 +86,12 @@
             border-radius: 4px;
         }
 
-        .alert-card.gfw {
+        .alert-card.deforestation {
             border-left-color: #388e3c;
         }
 
-        .alert-card.psa {
+        .alert-card.land-cover {
             border-left-color: #1976d2;
-        }
-
-        .alert-card.area-construida {
-            border-left-color: #f57c00;
         }
 
         .alert-card h3 {
@@ -149,39 +145,35 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 Resumen Semanal SIMBYP</h1>
-            <p>Generado el {{ summary.generated_at }}</p>
+            <h1>🌍 Alertas Semanales SIMBYP</h1>
+            <p>Deforestación y Cambios de Cobertura</p>
         </div>
 
+        {% if has_alerts %}
         <div class="summary">
-            <h2 style="margin-top: 0;">Resumen General</h2>
+            <h2 style="margin-top: 0;">Resumen Semanal</h2>
             <div class="summary-grid">
                 <div class="summary-card">
-                    <h3>{{ summary.total_alerts }}</h3>
+                    <h3>{{ total_count }}</h3>
                     <p>Total Alertas</p>
                 </div>
                 <div class="summary-card">
-                    <h3>{{ summary.gfw_count }}</h3>
-                    <p>GFW Deforestación</p>
+                    <h3>{{ deforestation_count }}</h3>
+                    <p>Deforestación</p>
                 </div>
                 <div class="summary-card">
-                    <h3>{{ summary.psa_count }}</h3>
-                    <p>Reportes PSA</p>
-                </div>
-                <div class="summary-card">
-                    <h3>{{ summary.area_construida_count }}</h3>
-                    <p>Área Construida</p>
+                    <h3>{{ land_cover_count }}</h3>
+                    <p>Cambios de Cobertura</p>
                 </div>
             </div>
         </div>
 
-        {% if has_alerts %}
-        <!-- GFW Deforestation Alerts -->
-        {% if alerts.gfw %}
+        <!-- Deforestation Alerts -->
+        {% if alerts.deforestation %}
         <div class="alert-section">
             <h2>🌳 Alertas de Deforestación (GFW)</h2>
-            {% for alert in alerts.gfw %}
-            <div class="alert-card gfw">
+            {% for alert in alerts.deforestation %}
+            <div class="alert-card deforestation">
                 <h3>{{ alert.title }}</h3>
                 <div class="alert-meta">
                     📅 Actualizado: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}
@@ -192,29 +184,12 @@
         </div>
         {% endif %}
 
-        <!-- PSA Reports -->
-        {% if alerts.psa %}
+        <!-- Land Cover Alerts -->
+        {% if alerts.land_cover %}
         <div class="alert-section">
-            <h2>📋 Reportes PSA</h2>
-            {% for alert in alerts.psa %}
-            <div class="alert-card psa">
-                <h3>{{ alert.title }}</h3>
-                <div class="alert-meta">
-                    📅 Actualizado: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
-                    📄 Archivo: {{ alert.report_name }}
-                </div>
-                <a href="{{ alert.url }}" class="btn">Ver Reporte</a>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Built Area Alerts -->
-        {% if alerts.area_construida %}
-        <div class="alert-section">
-            <h2>🏗️ Alertas de Área Construida</h2>
-            {% for alert in alerts.area_construida %}
-            <div class="alert-card area-construida">
+            <h2>📊 Cambios de Cobertura (PSA)</h2>
+            {% for alert in alerts.land_cover %}
+            <div class="alert-card land-cover">
                 <h3>{{ alert.title }}</h3>
                 <div class="alert-meta">
                     📅 Actualizado: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>

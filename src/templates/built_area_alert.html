@@ -1,20 +1,186 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Built Area Expansion Alert</title>
+    <title>Reporte Mensual de Área Construida</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            border-bottom: 3px solid #f57c00;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #f57c00;
+            margin: 0 0 10px 0;
+        }
+
+        .summary {
+            background: #ffe0b2;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .summary-card h3 {
+            margin: 0 0 5px 0;
+            font-size: 32px;
+            color: #f57c00;
+        }
+
+        .summary-card p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .alert-section {
+            margin-bottom: 30px;
+        }
+
+        .alert-section h2 {
+            color: #424242;
+            border-left: 4px solid #f57c00;
+            padding-left: 15px;
+            margin-bottom: 15px;
+        }
+
+        .alert-card {
+            background: #fafafa;
+            border-left: 4px solid #f57c00;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+
+        .alert-card h3 {
+            margin: 0 0 10px 0;
+            color: #212121;
+        }
+
+        .alert-meta {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #f57c00;
+            color: white !important;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #e65100;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .no-alerts {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .no-alerts-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
+
 <body>
-    <h1>Alert: Built Area Expansion Detected</h1>
-    <p>Dear User,</p>
-    <p>We have detected significant expansion in built areas in the monitored region. Please find the details below:</p>
-    <ul>
-        <li><strong>Location:</strong> {{ location }}</li>
-        <li><strong>Area Expanded:</strong> {{ area_expanded }} hectares</li>
-        <li><strong>Date of Detection:</strong> {{ detection_date }}</li>
-    </ul>
-    <p>We recommend taking immediate action to assess the impact of this expansion.</p>
-    <p>Best regards,<br>Your Monitoring Team</p>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ Reporte Mensual de Área Construida</h1>
+            <p>SIMBYP - Monitoreo de Expansión Urbana</p>
+        </div>
+
+        {% if alert.alerts %}
+        <div class="summary">
+            <h2 style="margin-top: 0;">Resumen del Mes</h2>
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <h3>{{ alert.count }}</h3>
+                    <p>Reportes Detectados</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Built Area Alerts -->
+        <div class="alert-section">
+            <h2>📍 Alertas de Expansión de Área Construida</h2>
+            {% for built_area_alert in alert.alerts %}
+            <div class="alert-card">
+                <h3>{{ built_area_alert.title }}</h3>
+                <div class="alert-meta">
+                    📅 Actualizado: {{ built_area_alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
+                    📄 Archivo: {{ built_area_alert.report_name }}
+                </div>
+                <a href="{{ built_area_alert.url }}" class="btn">Ver Reporte Completo</a>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <div class="no-alerts">
+            <div class="no-alerts-icon">✅</div>
+            <h2>No hay nuevas alertas de área construida</h2>
+            <p>No se han detectado cambios significativos en el área construida durante este período.</p>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>Este es un mensaje automático del Sistema de Monitoreo SIMBYP</p>
+            <p>Se envía el primer viernes de cada mes con los reportes del período anterior</p>
+            <p>Para más información, contacta al equipo técnico</p>
+        </div>
+    </div>
 </body>
+
 </html>

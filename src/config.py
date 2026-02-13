@@ -19,7 +19,7 @@ GCS_BUCKETS = {
 GCS_PREFIXES = {
     'gfw': 'reportes_gfw/',
     'psa': 'reportes_psa/',
-    'area_construida': 'reportes_area_construida/',
+    'area_construida': 'urban_sprawl/',
 }
 
 
@@ -41,10 +41,8 @@ def _download_recipients_csv() -> str | None:
 
 def _build_distribution_lists(csv_text: str | None) -> dict[str, list[str]]:
     groups = {
-        "gfw_alerts": [],
-        "psa_reports": [],
-        "area_construida": [],
-        "weekly_digest": [],
+        "weekly_alerts_recipients": [],
+        "monthly_built_area_recipients": [],
     }
     if not csv_text:
         return groups
@@ -53,30 +51,30 @@ def _build_distribution_lists(csv_text: str | None) -> dict[str, list[str]]:
         email = row.get("Correo", "").strip()
         if not email:
             continue
-        if row.get("reporte_gfw") == "1":
-            groups["gfw_alerts"].append(email)
-        if row.get("reporte_paramos") == "1":
-            groups["psa_reports"].append(email)
-        if row.get("reporte_area_construida") == "1":
-            groups["area_construida"].append(email)
-        if row.get("weekly_digest") == "1":
-            groups["weekly_digest"].append(email)
+        if row.get("weekly_alerts") == "1":
+            groups["weekly_alerts_recipients"].append(email)
+        if row.get("monthly_built_area") == "1":
+            groups["monthly_built_area_recipients"].append(email)
     return groups
 
 # Load recipients from CSV, fallback to env vars
 RECIPIENTS = _build_distribution_lists(_download_recipients_csv())
 if not any(RECIPIENTS.values()):
     RECIPIENTS = {
-        "gfw_alerts": _split_env_list(os.getenv("GFW_RECIPIENTS", "")),
-        "psa_reports": _split_env_list(os.getenv("PSA_RECIPIENTS", "")),
-        "area_construida": _split_env_list(os.getenv("AREA_CONSTRUIDA_RECIPIENTS", "")),
-        "weekly_digest": _split_env_list(os.getenv("DIGEST_RECIPIENTS", "")),
+        "weekly_alerts_recipients": _split_env_list(os.getenv("WEEKLY_ALERTS_RECIPIENTS", "")),
+        "monthly_built_area_recipients": _split_env_list(os.getenv("MONTHLY_BUILT_AREA_RECIPIENTS", "")),
     }
 
 # Email Configuration
 SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
 FROM_EMAIL = os.getenv('FROM_EMAIL', 'alerts@simbyp.org')
 FROM_NAME = os.getenv('FROM_NAME', 'SIMBYP Alertas')
+
+# Cloud SQL Configuration
+CLOUD_SQL_INSTANCE = os.getenv('CLOUD_SQL_INSTANCE', '')  # Format: project:region:instance
+CLOUD_SQL_DB = os.getenv('CLOUD_SQL_DB', 'simbyp_alerts')
+CLOUD_SQL_USER = os.getenv('CLOUD_SQL_USER', 'postgres')
+CLOUD_SQL_PASSWORD = os.getenv('CLOUD_SQL_PASSWORD', '')
 
 # Service Configuration
 DAYS_BACK = int(os.getenv('DAYS_BACK', 7))
