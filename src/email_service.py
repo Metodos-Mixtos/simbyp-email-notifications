@@ -73,14 +73,21 @@ class EmailService:
         return self.send_email(recipients, subject, html_content)
     
     def send_monthly_built_area(self, recipients: List[str], alert_data: Dict) -> bool:
-        """Send monthly built area alert email"""
+        """Send monthly built area alert email with UPL expansion data"""
         if not alert_data:
             logger.info("No built area alerts to send")
             return False
         
         template = self.jinja_env.get_template('built_area_alert.html')
         
-        html_content = template.render(alert=alert_data)
+        # Extract UPL data from alert
+        top_upls = alert_data.get('top_upls', [])
+        
+        html_content = template.render(
+            alert=alert_data,
+            top_upls=top_upls,
+            has_upls=len(top_upls) > 0
+        )
         
         subject = f"🏗️ Reporte Mensual de Área Construida - SIMBYP"
         

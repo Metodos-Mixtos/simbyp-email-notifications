@@ -67,6 +67,38 @@
             font-size: 14px;
         }
 
+        .upls-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .upls-table th,
+        .upls-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .upls-table th {
+            background-color: #f57c00;
+            color: white;
+            font-weight: 600;
+        }
+
+        .upls-table tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .upls-table td {
+            color: #333;
+        }
+
+        .ha-value {
+            font-weight: 600;
+            color: #f57c00;
+        }
+
         .alert-section {
             margin-bottom: 30px;
         }
@@ -141,30 +173,54 @@
             <p>SIMBYP - Monitoreo de Expansión Urbana</p>
         </div>
 
-        {% if alert.alerts %}
+        {% if has_upls %}
         <div class="summary">
-            <h2 style="margin-top: 0;">Resumen del Mes</h2>
-            <div class="summary-grid">
-                <div class="summary-card">
-                    <h3>{{ alert.count }}</h3>
-                    <p>Reportes Detectados</p>
+            <h2 style="margin-top: 0;">Áreas de Mayor Expansión</h2>
+            <p>Síntesis de las Unidades de Planeamiento Local (UPL) con mayor expansión de área construida:</p>
+            <table class="upls-table">
+                <thead>
+                    <tr>
+                        <th>UPL (Unidad de Planeamiento Local)</th>
+                        <th>Área Intersectada (ha)</th>
+                        <th>Área Intersectada Estricta (ha)</th>
+                        <th>Área Total (ha)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for upl in top_upls %}
+                    <tr>
+                        <td>{{ upl.UPL }}</td>
+                        <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA) }}</span></td>
+                        <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA_STRICT) }}</span></td>
+                        <td><span class="ha-value">{{ "%.2f"|format(upl.TOTAL_HA) }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Report Details -->
+        <div class="alert-section">
+            <h2>📄 Detalles del Reporte</h2>
+            <div class="alert-card">
+                <h3>{{ alert.title }}</h3>
+                <div class="alert-meta">
+                    📅 Actualizado: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
+                    📄 Archivo: {{ alert.report_name }}
                 </div>
+                <a href="{{ alert.url }}" class="btn">Ver Reporte Completo</a>
             </div>
         </div>
 
-        <!-- Built Area Alerts -->
-        <div class="alert-section">
-            <h2>📍 Alertas de Expansión de Área Construida</h2>
-            {% for built_area_alert in alert.alerts %}
-            <div class="alert-card">
-                <h3>{{ built_area_alert.title }}</h3>
-                <div class="alert-meta">
-                    📅 Actualizado: {{ built_area_alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
-                    📄 Archivo: {{ built_area_alert.report_name }}
-                </div>
-                <a href="{{ built_area_alert.url }}" class="btn">Ver Reporte Completo</a>
+        {% elif alert %}
+        <div class="summary">
+            <h2 style="margin-top: 0;">Reporte Disponible</h2>
+            <p>Se ha procesado el siguiente reporte de expansión de área construida:</p>
+            <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
+                <p><strong>Archivo:</strong> {{ alert.report_name }}</p>
+                <p><strong>Actualizado:</strong> {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}</p>
+                <a href="{{ alert.url }}" class="btn">Ver Reporte Completo</a>
             </div>
-            {% endfor %}
         </div>
 
         {% else %}

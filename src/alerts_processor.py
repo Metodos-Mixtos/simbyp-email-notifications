@@ -87,19 +87,64 @@ class AlertProcessor:
         return processed_reports
     
     def get_area_construida_alerts(self, days_back: int) -> List[Dict]:
-        """Get built area alerts"""
-        prefix = GCS_PREFIXES.get('area_construida', 'reportes_area_construida/')
+        """Get built area alerts - returns latest urban_sprawl_reporte and its data"""
+        prefix = GCS_PREFIXES.get('area_construida', 'urban_sprawl/')
         reports = self.gcs.list_recent_reports(self.bucket, prefix, days_back)
         
-        processed_alerts = []
-        for report in reports:
-            alert = {
-                'type': 'area_construida',
-                'report_name': report['name'].split('/')[-1],
-                'updated': report['updated'],
-                'url': report['public_url'],
-                'title': "Alerta de Área Construida"
-            }
-            processed_alerts.append(alert)
+        # Filter for only urban_sprawl_reporte_*.html files
+        filtered_reports = [r for r in reports if 'urban_sprawl_reporte_' in r['name'] and r['name'].endswith('.html')]
         
-        return processed_alerts
+        if not filtered_reports:
+            logger.info("No urban_sprawl_reporte files found")
+            return []
+        
+        # Sort by filename date (YYYY_MESNAME) to get the latest report
+        # Expected format: urban_sprawl_reporte_YYYY_MESNAME.html
+        def extract_date_from_filename(report):
+            filename = report['name'].split('/')[-1]
+            # Extract YYYY_MESNAME from urban_sprawl_reporte_YYYY_MESNAME.html
+            match = re.search(r'(\d{4})_(\w+)', filename)
+            if match:
+                year, month = match.groups()
+                # Create sortable key: year as int + month name (alphabetically)
+                # We'll use month_name for sorting, with year priority
+                return (int(year), month)
+            return (0, '')
+        
+        # Sort by year (desc) then by month name for reports in same year
+        months_order = {
+            'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4, 'Mayo': 5,
+            'Junio': 6, 'Julio': 7, 'Agosto': 8, 'Septiembre': 9,
+            'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12
+        }
+        
+        def sort_key(report):
+            year, month = extract_date_from_filename(report)
+            month_num = months_order.get(month, 0)
+            return (year, month_num)
+        
+        sorted_reports = sorted(filtered_reports, key=sort_key, reverse=True)
+        latest_report = sorted_reports[0]
+        
+        logger.info(f"Selected latest report: {latest_report['name']}")
+        
+        # Try to find and read the JSON data file in the same directory
+        report_dir = '/'.join(latest_report['name'].split('/')[:-1])
+        json_file_path = f"{report_dir}/urban_sprawl_reporte.json"
+        
+        logger.info(f"Looking for JSON file at: {json_file_path}")
+        json_data = self.gcs.download_json(self.bucket, json_file_path)
+        
+        # Extract TOP_UPLS from JSON
+        top_upls = json_data.get('TOP_UPLS', []) if json_data else []
+        
+        alert = {
+            'type': 'area_construida',
+            'report_name': latest_report['name'].split('/')[-1],
+            'updated': latest_report['updated'],
+            'url': latest_report['public_url'],
+            'title': "Reporte Mensual de Área Construida",
+            'top_upls': top_upls
+        }
+        
+        return [alert]

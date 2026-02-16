@@ -123,15 +123,11 @@ def send_monthly_built_area():
                 'message': 'No recipients configured'
             }), 200
         
-        # Create a composite alert data
-        alert_data = {
-            'alerts': alerts,
-            'count': len(alerts),
-            'title': 'Reporte Mensual de Área Construida'
-        }
+        # Get the first (and only) alert
+        alert_data = alerts[0]
         
         # Check for duplicates
-        alert_key = f"monthly_built_area_{','.join(sorted([a['report_name'] for a in alerts]))}"
+        alert_key = f"monthly_built_area_{alert_data['report_name']}"
         if utils.is_alert_already_sent('monthly_built_area', alert_key, recipients):
             logger.warning(f"Monthly built area report already sent to these recipients")
             return jsonify({

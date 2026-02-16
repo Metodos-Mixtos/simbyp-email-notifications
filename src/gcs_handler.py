@@ -2,6 +2,7 @@ from google.cloud import storage
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -69,4 +70,17 @@ class GCSHandler:
             }
         except Exception as e:
             logger.error(f"Error getting metadata for {blob_name}: {str(e)}")
+            return {}
+    
+    def download_json(self, bucket_name: str, blob_name: str) -> Dict:
+        """Download and parse a JSON file from GCS"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+            json_text = blob.download_as_text()
+            data = json.loads(json_text)
+            logger.info(f"Successfully loaded JSON from {bucket_name}/{blob_name}")
+            return data
+        except Exception as e:
+            logger.error(f"Error downloading JSON from {bucket_name}/{blob_name}: {str(e)}")
             return {}
