@@ -1,5 +1,5 @@
 from google.cloud import storage
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 import logging
 
@@ -15,7 +15,7 @@ class GCSHandler:
             bucket = self.client.bucket(bucket_name)
             blobs = bucket.list_blobs(prefix=prefix)
             
-            cutoff = datetime.now() - timedelta(days=days_back)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
             recent_reports = []
             
             for blob in blobs:

@@ -100,15 +100,7 @@ def send_monthly_built_area():
     Skips if no alerts found.
     """
     try:
-        logger.info("Checking if today is first Friday of month for built area report")
-        
-        # Check if today is the first Friday
-        if not utils.is_first_friday_of_month():
-            logger.info(f"Today is not the first Friday of the month; skipping")
-            return jsonify({
-                'status': 'skipped',
-                'message': 'Not the first Friday of the month'
-            }), 204
+        logger.info("Starting built area report generation")
         
         # Get built area alerts
         alerts = alert_processor.get_monthly_built_area()
