@@ -6,87 +6,123 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte Mensual de Área Construida</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
             background-color: #f5f5f5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .wrapper {
+            display: inline-block;
+            width: 100%;
+            max-width: 800px;
+            text-align: left;
         }
 
         .container {
+            max-width: 100%;
+            width: 100%;
+            margin: 0;
             background: white;
             border-radius: 8px;
-            padding: 30px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
         }
 
         .header {
-            border-bottom: 3px solid #f57c00;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
+            border-bottom: 3px solid #d1452f;
+            padding: 30px 20px;
+            background: #fff9f7;
         }
 
         h1 {
-            color: #f57c00;
+            color: #d1452f;
             margin: 0 0 10px 0;
+            font-size: clamp(22px, 5vw, 28px);
+            line-height: 1.3;
+        }
+
+        h2 {
+            font-size: clamp(18px, 4vw, 22px);
+            margin-bottom: 15px;
+        }
+
+        p {
+            font-size: clamp(14px, 2vw, 16px);
         }
 
         .summary {
             background: #ffe0b2;
-            padding: 20px;
+            padding: clamp(15px, 5vw, 30px);
             border-radius: 8px;
-            margin-bottom: 30px;
+            margin: clamp(20px, 5vw, 30px);
         }
 
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: clamp(10px, 3vw, 15px);
             margin-top: 15px;
         }
 
         .summary-card {
             background: white;
-            padding: 15px;
+            padding: clamp(12px, 3vw, 15px);
             border-radius: 6px;
             text-align: center;
         }
 
         .summary-card h3 {
             margin: 0 0 5px 0;
-            font-size: 32px;
-            color: #f57c00;
+            font-size: clamp(24px, 6vw, 32px);
+            color: #d1452f;
         }
 
         .summary-card p {
             margin: 0;
             color: #666;
-            font-size: 14px;
+            font-size: clamp(12px, 2vw, 14px);
+        }
+
+        /* Responsive Table */
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 15px 0;
         }
 
         .upls-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
+            font-size: clamp(12px, 2vw, 14px);
         }
 
         .upls-table th,
         .upls-table td {
-            padding: 12px;
+            padding: clamp(8px, 2vw, 12px);
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
 
         .upls-table th {
-            background-color: #f57c00;
+            background-color: #d1452f;
             color: white;
             font-weight: 600;
+            white-space: nowrap;
         }
 
-        .upls-table tr:hover {
+        .upls-table tbody tr:hover {
             background-color: #f9f9f9;
         }
 
@@ -96,24 +132,25 @@
 
         .ha-value {
             font-weight: 600;
-            color: #f57c00;
+            color: #d1452f;
         }
 
         .alert-section {
-            margin-bottom: 30px;
+            margin-bottom: clamp(20px, 5vw, 30px);
+            padding: 0 clamp(15px, 5vw, 30px);
         }
 
         .alert-section h2 {
             color: #424242;
-            border-left: 4px solid #f57c00;
+            border-left: 4px solid #d1452f;
             padding-left: 15px;
             margin-bottom: 15px;
         }
 
         .alert-card {
             background: #fafafa;
-            border-left: 4px solid #f57c00;
-            padding: 20px;
+            border-left: 4px solid #d1452f;
+            padding: clamp(15px, 4vw, 20px);
             margin-bottom: 15px;
             border-radius: 4px;
         }
@@ -121,92 +158,240 @@
         .alert-card h3 {
             margin: 0 0 10px 0;
             color: #212121;
+            font-size: clamp(16px, 3vw, 18px);
         }
 
         .alert-meta {
             color: #666;
-            font-size: 14px;
+            font-size: clamp(12px, 2vw, 14px);
             margin-bottom: 15px;
+            line-height: 1.5;
         }
 
         .btn {
             display: inline-block;
-            background: #f57c00;
+            background: #d1452f;
             color: white !important;
-            padding: 12px 24px;
+            padding: clamp(10px, 2vw, 12px) clamp(16px, 4vw, 24px);
             text-decoration: none;
             border-radius: 4px;
             font-weight: 500;
-            transition: background 0.3s;
+            transition: background 0.3s ease;
+            font-size: clamp(12px, 2vw, 14px);
+            border: none;
+            cursor: pointer;
         }
 
         .btn:hover {
-            background: #e65100;
+            background: #b8372b;
+            text-decoration: none;
         }
 
         .footer {
-            margin-top: 40px;
-            padding-top: 20px;
+            margin-top: clamp(30px, 5vw, 40px);
+            padding: clamp(15px, 4vw, 20px);
             border-top: 1px solid #e0e0e0;
             text-align: center;
             color: #666;
-            font-size: 14px;
+            font-size: clamp(12px, 2vw, 13px);
+            background: #f9f9f9;
+        }
+
+        .footer p {
+            margin: 8px 0;
         }
 
         .no-alerts {
             text-align: center;
-            padding: 40px 20px;
+            padding: clamp(30px, 10vw, 50px) clamp(15px, 5vw, 20px);
             color: #666;
         }
 
         .no-alerts-icon {
-            font-size: 48px;
+            font-size: clamp(36px, 10vw, 48px);
             margin-bottom: 20px;
+        }
+
+        .no-alerts h2 {
+            font-size: clamp(18px, 4vw, 24px);
+            margin-bottom: 10px;
+        }
+
+        /* Mobile-first media queries */
+        @media (max-width: 480px) {
+            body {
+                padding: 0;
+                text-align: center;
+            }
+
+            .wrapper {
+                display: block;
+                max-width: 100%;
+            }
+
+            .container {
+                border-radius: 0;
+                box-shadow: none;
+            }
+
+            .header {
+                padding: 20px 15px;
+            }
+
+            .summary {
+                margin: 15px 0;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .alert-section {
+                padding: 0 15px;
+            }
+
+            /* Table scrolling for mobile */
+            .upls-table {
+                font-size: 12px;
+            }
+
+            .upls-table th,
+            .upls-table td {
+                padding: 8px 6px;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            h2 {
+                font-size: 18px;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #1a1a1a;
+            }
+
+            .container {
+                background: #2a2a2a;
+                color: #e0e0e0;
+            }
+
+            .header {
+                background: #1a1a1a;
+            }
+
+            .summary {
+                background: #3a3a3a;
+                color: #e0e0e0;
+            }
+
+            .summary-card {
+                background: #2a2a2a;
+                color: #e0e0e0;
+            }
+
+            .alert-card {
+                background: #333333;
+                color: #e0e0e0;
+            }
+
+            .upls-table {
+                color: #e0e0e0;
+            }
+
+            .upls-table td {
+                border-bottom-color: #444;
+            }
+
+            .upls-table tbody tr:hover {
+                background-color: #3a3a3a;
+            }
+
+            .footer {
+                background: #1a1a1a;
+                border-top-color: #444;
+                color: #aaa;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                max-width: 100%;
+                box-shadow: none;
+                border-radius: 0;
+            }
+
+            .btn {
+                display: none;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🏗️ Reporte Mensual de Área Construida</h1>
-            <p>SIMBYP - Monitoreo de Expansión Urbana</p>
+    <div class="wrapper">
+        <div class="container">
+            <div class="header">
+            <h1>Reporte Mensual de Expansión de Área Construida en Bogotá</h1>
+            <p>Sistema de Monitoreo de Bosques y Páramos - SIMBYP</p>
         </div>
 
         {% if has_upls %}
         <div class="summary">
-            <h2 style="margin-top: 0;">Áreas de Mayor Expansión</h2>
+            <h2 style="margin-top: 0;">UPLs con Mayor Expansión de Área Construida</h2>
             <p>Síntesis de las Unidades de Planeamiento Local (UPL) con mayor expansión de área construida:</p>
-            <table class="upls-table">
-                <thead>
-                    <tr>
-                        <th>UPL (Unidad de Planeamiento Local)</th>
-                        <th>Área Intersectada (ha)</th>
-                        <th>Área Intersectada Estricta (ha)</th>
-                        <th>Área Total (ha)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for upl in top_upls %}
-                    <tr>
-                        <td>{{ upl.UPL }}</td>
-                        <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA) }}</span></td>
-                        <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA_STRICT) }}</span></td>
-                        <td><span class="ha-value">{{ "%.2f"|format(upl.TOTAL_HA) }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-wrapper">
+                <table class="upls-table">
+                    <thead>
+                        <tr>
+                            <th>UPL (Unidad de Planeamiento Local)</th>
+                            <th>Área Intersectada (ha)</th>
+                            <th>Área Intersectada Estricta (ha)</th>
+                            <th>Área Total (ha)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for upl in top_upls %}
+                        <tr>
+                            <td>{{ upl.UPL }}</td>
+                            <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA) }}</span></td>
+                            <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA_STRICT) }}</span></td>
+                            <td><span class="ha-value">{{ "%.2f"|format(upl.TOTAL_HA) }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Report Details -->
         <div class="alert-section">
-            <h2>📄 Detalles del Reporte</h2>
+            <h2>Detalles del Reporte</h2>
             <div class="alert-card">
                 <h3>{{ alert.title }}</h3>
                 <div class="alert-meta">
-                    📅 Actualizado: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
-                    📄 Archivo: {{ alert.report_name }}
+                    📅 Fecha del reporte: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
                 </div>
                 <a href="{{ alert.url }}" class="btn">Ver Reporte Completo</a>
             </div>
@@ -217,8 +402,7 @@
             <h2 style="margin-top: 0;">Reporte Disponible</h2>
             <p>Se ha procesado el siguiente reporte de expansión de área construida:</p>
             <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
-                <p><strong>Archivo:</strong> {{ alert.report_name }}</p>
-                <p><strong>Actualizado:</strong> {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}</p>
+                <p><strong>Fecha del reporte:</strong> {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}</p>
                 <a href="{{ alert.url }}" class="btn">Ver Reporte Completo</a>
             </div>
         </div>
@@ -236,6 +420,7 @@
             <p>Se envía el primer viernes de cada mes con los reportes del período anterior</p>
             <p>Para más información, contacta al equipo técnico</p>
         </div>
+    </div>
     </div>
 </body>
 

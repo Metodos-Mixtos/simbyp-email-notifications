@@ -70,12 +70,6 @@ SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
 FROM_EMAIL = os.getenv('FROM_EMAIL', 'alerts@simbyp.org')
 FROM_NAME = os.getenv('FROM_NAME', 'SIMBYP Alertas')
 
-# Cloud SQL Configuration
-CLOUD_SQL_INSTANCE = os.getenv('CLOUD_SQL_INSTANCE', '')  # Format: project:region:instance
-CLOUD_SQL_DB = os.getenv('CLOUD_SQL_DB', 'simbyp_alerts')
-CLOUD_SQL_USER = os.getenv('CLOUD_SQL_USER', 'postgres')
-CLOUD_SQL_PASSWORD = os.getenv('CLOUD_SQL_PASSWORD', '')
-
 # Service Configuration
 DAYS_BACK = int(os.getenv('DAYS_BACK', 7))
 PORT = int(os.getenv('PORT', 8080))

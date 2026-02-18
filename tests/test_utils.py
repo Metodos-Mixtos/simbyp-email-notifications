@@ -32,51 +32,6 @@ class TestSchedulingUtils(unittest.TestCase):
         self.assertGreaterEqual(first_friday.day, 1)
         self.assertLessEqual(first_friday.day, 7)
 
-    def test_get_recipients_hash_consistency(self):
-        """Test that recipients hash is consistent"""
-        recipients = ['alice@example.com', 'bob@example.com']
-        hash1 = utils.get_recipients_hash(recipients)
-        hash2 = utils.get_recipients_hash(recipients)
-        self.assertEqual(hash1, hash2)
-
-    def test_get_recipients_hash_order_independent(self):
-        """Test that recipients hash is independent of order"""
-        recipients1 = ['alice@example.com', 'bob@example.com']
-        recipients2 = ['bob@example.com', 'alice@example.com']
-        hash1 = utils.get_recipients_hash(recipients1)
-        hash2 = utils.get_recipients_hash(recipients2)
-        self.assertEqual(hash1, hash2)
-
-    def test_get_recipients_hash_case_insensitive(self):
-        """Test that recipients hash is case-insensitive"""
-        recipients1 = ['Alice@Example.com']
-        recipients2 = ['alice@example.com']
-        hash1 = utils.get_recipients_hash(recipients1)
-        hash2 = utils.get_recipients_hash(recipients2)
-        self.assertEqual(hash1, hash2)
-
-    def test_get_recipients_hash_deduplicates(self):
-        """Test that recipients hash deduplicates"""
-        recipients1 = ['alice@example.com', 'alice@example.com']
-        recipients2 = ['alice@example.com']
-        hash1 = utils.get_recipients_hash(recipients1)
-        hash2 = utils.get_recipients_hash(recipients2)
-        self.assertEqual(hash1, hash2)
-
-
-class TestDeduplicationUtils(unittest.TestCase):
-    """Test deduplication utilities"""
-
-    def test_is_alert_already_sent_no_cloud_sql(self):
-        """Test that dedup returns False when Cloud SQL not configured"""
-        result = utils.is_alert_already_sent('test_type', 'test_report', ['test@example.com'])
-        self.assertFalse(result)
-
-    def test_record_sent_alert_no_cloud_sql(self):
-        """Test that record returns False when Cloud SQL not configured"""
-        result = utils.record_sent_alert('test_type', 'test_report', ['test@example.com'])
-        self.assertFalse(result)
-
 
 if __name__ == '__main__':
     unittest.main()

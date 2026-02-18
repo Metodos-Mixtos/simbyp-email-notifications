@@ -68,7 +68,7 @@ class EmailService:
             has_alerts=total_count > 0
         )
         
-        subject = f"🌍 Alertas Semanales SIMBYP - Deforestación y Cambios de Cobertura"
+        subject = f"Alertas Semanales SIMBYP - Deforestación y Cambios de Cobertura"
         
         return self.send_email(recipients, subject, html_content)
     
@@ -89,6 +89,6 @@ class EmailService:
             has_upls=len(top_upls) > 0
         )
         
-        subject = f"🏗️ Reporte Mensual de Área Construida - SIMBYP"
+        subject = f"Reporte Mensual de Área Construida - SIMBYP"
         
         return self.send_email(recipients, subject, html_content)

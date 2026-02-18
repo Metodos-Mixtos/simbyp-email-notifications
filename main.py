@@ -57,22 +57,10 @@ def send_weekly_alerts():
                 'message': 'No recipients configured'
             }), 200
         
-        # Check for duplicates
-        # Create a composite key from alerts
-        alert_key = f"weekly_alerts_{','.join(sorted([a['report_name'] for alerts_list in alerts.values() for a in alerts_list]))}"
-        if utils.is_alert_already_sent('weekly_alerts', alert_key, recipients):
-            logger.warning(f"Weekly alerts already sent to these recipients")
-            return jsonify({
-                'status': 'skipped',
-                'message': 'Alerts already sent to these recipients this week'
-            }), 204
-        
         # Send email
         success = email_service.send_weekly_alerts(recipients, alerts)
         
         if success:
-            # Record the sent alert
-            utils.record_sent_alert('weekly_alerts', alert_key, recipients)
             return jsonify({
                 'status': 'success',
                 'message': 'Weekly alerts sent successfully',
@@ -126,21 +114,10 @@ def send_monthly_built_area():
         # Get the first (and only) alert
         alert_data = alerts[0]
         
-        # Check for duplicates
-        alert_key = f"monthly_built_area_{alert_data['report_name']}"
-        if utils.is_alert_already_sent('monthly_built_area', alert_key, recipients):
-            logger.warning(f"Monthly built area report already sent to these recipients")
-            return jsonify({
-                'status': 'skipped',
-                'message': 'Report already sent to these recipients this month'
-            }), 204
-        
         # Send email
         success = email_service.send_monthly_built_area(recipients, alert_data)
         
         if success:
-            # Record the sent alert
-            utils.record_sent_alert('monthly_built_area', alert_key, recipients)
             return jsonify({
                 'status': 'success',
                 'message': 'Monthly built area report sent successfully',
