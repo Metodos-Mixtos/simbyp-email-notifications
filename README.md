@@ -8,10 +8,10 @@ A Flask-based email notification system that sends scheduled environmental alert
   - Weekly email (every Tuesday): Deforestation (GFW) + Land Cover (PSA) alerts
   - Monthly email (first Friday): Built area expansion alerts
 - **Cloud Storage Integration**: Reads alert reports from Google Cloud Storage
-- **Deduplication System**: Uses Cloud SQL to prevent duplicate email sends
 - **Dynamic Recipients**: Loads recipient lists from a CSV file stored in GCS or environment variables
 - **HTML Templates**: Professionally formatted email templates for each alert type
 - **Cloud-Ready**: Containerized with Docker, deployable on Cloud Run
+- **Simple & Lightweight**: No database dependency, lightweight deployment
 
 ## Project Structure
 
@@ -21,7 +21,7 @@ src/
 ├── email_service.py               # SendGrid email sending logic
 ├── gcs_handler.py                 # Google Cloud Storage operations
 ├── alerts_processor.py            # Alert aggregation and processing
-├── utils.py                       # Database, scheduling, and utility functions
+├── utils.py                       # Scheduling and utility functions
 └── templates/                     # HTML email templates
     ├── built_area_alert.html      # Monthly built area report
     └── weekly_alerts.html         # Weekly deforestation + land cover alerts
@@ -40,7 +40,6 @@ requirements.txt                   # Python dependencies
 - Google Cloud Project with:
   - Service account credentials (JSON key file)
   - Storage bucket with alert reports and recipient CSV
-  - Cloud SQL PostgreSQL instance (for deduplication)
 - SendGrid account with API key
 - Email account verified with SendGrid
 
@@ -61,12 +60,6 @@ pip install -r requirements.txt
 ```bash
 # Create a service account and download the JSON key
 export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account-key.json"
-
-# Create Cloud SQL PostgreSQL instance
-gcloud sql instances create simbyp-alerts \
-  --database-version POSTGRES_15 \
-  --tier db-f1-micro \
-  --region us-central1
 ```
 
 Prepare a CSV file in your GCS bucket with recipient data. Example:
@@ -109,12 +102,6 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 SENDGRID_API_KEY=your-api-key
 FROM_EMAIL=alerts@example.com
 FROM_NAME=SIMBYP Alertas
-
-# Cloud SQL Configuration (for deduplication)
-CLOUD_SQL_INSTANCE=your-project:region:instance-name
-CLOUD_SQL_DB=simbyp_alerts
-CLOUD_SQL_USER=postgres
-CLOUD_SQL_PASSWORD=your-secure-password
 
 # Fallback Recipients (comma-separated, used if CSV unavailable)
 WEEKLY_ALERTS_RECIPIENTS=user1@example.com,user2@example.com
@@ -185,18 +172,20 @@ gcloud scheduler jobs create http send-weekly-alerts \
 POST /send-monthly-built-area
 ```
 
-Checks if today is the first Friday of the month. If so, fetches built area alerts from the last `DAYS_BACK` days and sends them to monthly built area recipients. Skips if not the first Friday or no alerts found.
+Fetches built area alerts from the last `DAYS_BACK` days and sends them to monthly built area recipients. Skips if no alerts found.
 
-**Triggering**: Call via Cloud Scheduler daily at 9 AM UTC (endpoint self-checks for first Friday):
+**Triggering**: Call via Cloud Scheduler only on the first Friday of each month at 9 AM UTC using a cron expression:
 ```bash
 gcloud scheduler jobs create http send-monthly-built-area \
   --location us-central1 \
-  --schedule "0 9 * * *" \
+  --schedule "0 9 1-7 * FRI" \
   --uri "https://your-cloud-run-url/send-monthly-built-area" \
   --http-method POST
 ```
 
-**Response (first Friday with alerts):**
+The cron expression `0 9 1-7 * FRI` ensures the job runs only on Fridays that fall within the first 7 days of the month, eliminating unnecessary daily wake-ups.
+
+**Response (with alerts):**
 ```json
 {
   "status": "success",
@@ -206,11 +195,12 @@ gcloud scheduler jobs create http send-monthly-built-area \
 }
 ```
 
-**Response (not first Friday):**
+**Response (no alerts):**
 ```json
 {
   "status": "skipped",
-  "message": "Not the first Friday of the month"
+  "message": "No built area alerts found",
+  "alerts": 0
 }
 ```
 
@@ -257,12 +247,6 @@ docker run -e PORT=8080 --env-file .env simbyp-email-notifications
 
 ### Google Cloud Run
 
-#### For the first time:
-
-1. Ensure Cloud SQL instance is created
-2. Create Cloud SQL service account and user
-3. Deploy the application:
-
 ```bash
 gcloud run deploy simbyp-email-notifications \
   --source . \
@@ -271,28 +255,13 @@ gcloud run deploy simbyp-email-notifications \
   --set-env-vars \
     GCP_PROJECT_ID=your-project,\
     SENDGRID_API_KEY=your-key,\
-    CLOUD_SQL_INSTANCE=your-project:region:instance \
-  --memory 512Mi \
-  --timeout 540 \
+    RECIPIENTS_CSV_URI=gs://your-bucket/recipients.csv \
+  --memory 256Mi \
+  --timeout 300 \
   --service-account your-service-account@your-project.iam.gserviceaccount.com
 ```
 
-4. Create Cloud Scheduler jobs (see API Endpoints section above)
-
-## Deduplication System
-
-The system uses Cloud SQL PostgreSQL to track sent alerts and prevent duplicates:
-
-- **Table**: `sent_alerts`
-- **Fields**: 
-  - `id`: Unique alert ID
-  - `alert_type`: 'weekly_alerts' or 'monthly_built_area'
-  - `report_name`: Name of the report file
-  - `recipients_hash`: SHA256 hash of recipient list
-  - `recipients_list`: JSON array of recipients
-  - `sent_date`: When the alert was sent
-
-Each alert is identified by its type, report name, and recipient list. If the same report is sent to the same group of recipients, the second attempt is skipped.
+Then create Cloud Scheduler jobs (see API Endpoints section above).
 
 ## Testing
 
@@ -332,14 +301,15 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 - Confirm the sender email is verified in SendGrid
 - Check SendGrid Activity Feed for bounce/delivery errors
 
-**Issue**: Cloud SQL connection errors
-- Verify Cloud SQL instance exists and is running
-- Check database credentials in `.env`
-- Ensure service account has Cloud SQL Client role
+**Issue**: GCS connection errors
+- Verify service account has Storage Object Viewer role on the bucket
+- Check `RECIPIENTS_CSV_URI` and `GCP_PROJECT_ID` are correct
 
-**Issue**: Duplicate emails being sent
-- Check `sent_alerts` table in Cloud SQL
-- Verify recipients list hasn't changed between sends
+## Notes
+
+- **Email Duplicates**: The system no longer prevents duplicate emails. If the same alert is triggered multiple times, it may be sent multiple times to the recipients. This is intentional for simplicity.
+- **Simple & Lightweight**: No database dependency means faster deployments and lower operational overhead.
+- **Stateless**: Each service invocation is independent; no state is maintained between calls.
 
 ## Contributing
 
