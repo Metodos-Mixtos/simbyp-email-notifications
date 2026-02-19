@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte Semanal de Alertas SIMBYP</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            border-bottom: 3px solid #1976d2;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #1976d2;
+            margin: 0 0 10px 0;
+        }
+
+        .period {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .report-section {
+            margin-bottom: 30px;
+        }
+
+        .report-card {
+            background: #f0f7ff;
+            border-left: 4px solid #1976d2;
+            padding: 25px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .report-card p {
+            margin: 10px 0;
+            color: #555;
+        }
+
+        .meta-info {
+            background: #fafafa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .meta-info-item {
+            margin: 8px 0;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #1976d2;
+            color: white !important;
+            padding: 14px 32px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            transition: background 0.3s;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: #1565c0;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Reporte Semanal de Alertas de Deforestación y Cambios en Páramos - SIMBYP</h1>
+            <p class="period">Período: {{ report.start_date }} a {{ report.end_date }}</p>
+        </div>
+
+        <div class="report-section">
+            <div class="report-card">
+                <h2>{{ report.title }}</h2>
+                <p>Se ha generado un nuevo reporte con el análisis semanal de alertas de deforestación y cambios de cobertura en páramos.</p>
+                
+                <div class="meta-info">
+                    <div class="meta-info-item">
+                        <span class="meta-label">📅 Período:</span> {{ report.start_date }} a {{ report.end_date }}
+                    </div>
+                    <div class="meta-info-item">
+                        <span class="meta-label">📄 Archivo:</span> {{ report.report_name }}
+                    </div>
+                </div>
+
+                <p><strong>Accede al reporte completo con visualizaciones interactivas:</strong></p>
+                <a href="{{ report.url }}" class="btn">Ver Reporte Completo</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Este es un mensaje automático del Sistema de Monitoreo de Bosques y Páramos de Bogotá (SIMBYP)</p>
+            <p>Para más información o reportar problemas, contacta al equipo técnico en simbyp@sdp.gov.co</p>
+        </div>
+    </div>
+</body>
+
+</html>

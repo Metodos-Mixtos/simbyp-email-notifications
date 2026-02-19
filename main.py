@@ -28,23 +28,23 @@ def health_check():
 @app.route('/send-weekly-alerts', methods=['POST'])
 def send_weekly_alerts():
     """
-    Endpoint to send weekly alerts (deforestation + land cover).
+    Endpoint to send the latest weekly alerts report.
+    Fetches and sends the most recent weekly report.
     Triggered by Cloud Scheduler every Tuesday.
-    Skips if no alerts found.
+    Skips if no report found.
     """
     try:
-        logger.info("Starting weekly alerts generation")
+        logger.info("Starting weekly alerts report sending")
         
-        # Get weekly alerts (deforestation + land_cover)
-        alerts = alert_processor.get_weekly_alerts()
-        total_alerts = sum(len(v) for v in alerts.values())
+        # Get latest weekly alerts report
+        weekly_report = alert_processor.get_latest_weekly_alerts_report()
         
-        if total_alerts == 0:
-            logger.info("No weekly alerts to send")
+        if not weekly_report:
+            logger.info("No weekly report found to send")
             return jsonify({
                 'status': 'skipped',
-                'message': 'No alerts found for this week',
-                'alerts': total_alerts
+                'message': 'No weekly report found',
+                'report': None
             }), 204
         
         # Get recipients
@@ -57,20 +57,20 @@ def send_weekly_alerts():
                 'message': 'No recipients configured'
             }), 200
         
-        # Send email
-        success = email_service.send_weekly_alerts(recipients, alerts)
+        # Send email with report only
+        success = email_service.send_weekly_report(recipients, weekly_report)
         
         if success:
             return jsonify({
                 'status': 'success',
-                'message': 'Weekly alerts sent successfully',
-                'alerts': total_alerts,
+                'message': 'Weekly report sent successfully',
+                'report': weekly_report['title'],
                 'recipients': recipients
             }), 200
         else:
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to send weekly alerts'
+                'message': 'Failed to send weekly report'
             }), 500
     
     except Exception as e:
@@ -139,17 +139,20 @@ def send_monthly_built_area():
 
 @app.route('/test-alerts', methods=['GET'])
 def test_alerts():
-    """Test endpoint to see what alerts would be sent"""
+    """Test endpoint to see what would be sent"""
     try:
-        weekly_alerts = alert_processor.get_weekly_alerts()
+        weekly_report = alert_processor.get_latest_weekly_alerts_report()
         monthly_alerts = alert_processor.get_monthly_built_area()
         is_first_friday = utils.is_first_friday_of_month()
         
         return jsonify({
-            'weekly_alerts': {
-                'deforestation': [{'title': a['title'], 'updated': a['updated'].isoformat()} for a in weekly_alerts.get('deforestation', [])],
-                'land_cover': [{'title': a['title'], 'updated': a['updated'].isoformat()} for a in weekly_alerts.get('land_cover', [])]
-            },
+            'weekly_report': {
+                'title': weekly_report['title'] if weekly_report else None,
+                'url': weekly_report['url'] if weekly_report else None,
+                'start_date': weekly_report['start_date'] if weekly_report else None,
+                'end_date': weekly_report['end_date'] if weekly_report else None,
+                'updated': weekly_report['updated'].isoformat() if weekly_report else None
+            } if weekly_report else None,
             'monthly_built_area': {
                 'alerts': [{'title': a['title'], 'updated': a['updated'].isoformat()} for a in monthly_alerts],
                 'is_first_friday': is_first_friday

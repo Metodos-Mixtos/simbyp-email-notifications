@@ -20,6 +20,7 @@ GCS_PREFIXES = {
     'gfw': 'reportes_gfw/',
     'psa': 'reportes_psa/',
     'area_construida': 'urban_sprawl/',
+    'weekly_alerts': 'reportes_gfw/semana_',
 }
 
 

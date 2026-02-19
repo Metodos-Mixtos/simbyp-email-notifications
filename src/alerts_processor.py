@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 import logging
 from datetime import datetime
 import re
@@ -85,6 +85,65 @@ class AlertProcessor:
                 processed_reports.append(alert)
         
         return processed_reports
+    
+    def get_latest_weekly_alerts_report(self) -> Optional[Dict]:
+        """
+        Fetch the latest weekly alerts report from GCS.
+        Expected format: reportes_gfw/semana_YYYY-MM-DD_a_YYYY-MM-DD/reporte_final.html
+        Returns report info or None if not found
+        """
+        try:
+            prefix = GCS_PREFIXES['weekly_alerts']
+            logger.info(f"Searching for weekly reports with prefix: {prefix}")
+            all_objects = self.gcs.list_all_objects(self.bucket, prefix)
+            logger.info(f"Found {len(all_objects)} total objects with prefix {prefix}")
+            
+            # Log first 10 objects found
+            for i, obj in enumerate(all_objects[:10]):
+                logger.info(f"  Object {i+1}: {obj['name']}")
+            
+            # Filter for HTML files within semana_ directories
+            # Expected pattern: reportes_gfw/semana_YYYY-MM-DD_a_YYYY-MM-DD/reporte_final.html
+            report_files = [
+                obj for obj in all_objects
+                if obj['name'].endswith('.html')
+            ]
+            
+            logger.info(f"Found {len(report_files)} HTML files")
+            for i, obj in enumerate(report_files[:5]):
+                logger.info(f"  Report {i+1}: {obj['name']}")
+            
+            if not report_files:
+                logger.info("No weekly alerts reports found")
+                return None
+            
+            # Get the latest report (already sorted by updated time descending)
+            latest_report = report_files[0]
+            
+            # Extract dates from the folder name
+            # Format: reportes_gfw/semana_YYYY-MM-DD_a_YYYY-MM-DD/reporte_final.html
+            match = re.search(r'semana_(\d{4}-\d{2}-\d{2})_a_(\d{4}-\d{2}-\d{2})', latest_report['name'])
+            
+            if match:
+                start_date, end_date = match.groups()
+                report_info = {
+                    'type': 'weekly_alerts_report',
+                    'report_name': latest_report['name'].split('/')[-1],
+                    'updated': latest_report['updated'],
+                    'url': latest_report['public_url'],
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'title': f"Reporte de Alertas Semanales - {start_date} a {end_date}"
+                }
+                logger.info(f"Found latest weekly alerts report: {latest_report['name']}")
+                return report_info
+            else:
+                logger.warning(f"Could not extract dates from report name: {latest_report['name']}")
+                return None
+        
+        except Exception as e:
+            logger.error(f"Error getting latest weekly alerts report: {str(e)}")
+            return None
     
     def get_area_construida_alerts(self, days_back: int) -> List[Dict]:
         """Get built area alerts - returns latest urban_sprawl_reporte and its data"""

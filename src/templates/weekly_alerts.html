@@ -201,6 +201,22 @@
         </div>
         {% endif %}
 
+        <!-- Weekly Report -->
+        {% if has_report %}
+        <div class="alert-section">
+            <h2>📋 Reporte Semanal de Alertas</h2>
+            <div class="alert-card" style="border-left-color: #f57c00;">
+                <h3>{{ weekly_report.title }}</h3>
+                <div class="alert-meta">
+                    📅 Período: {{ weekly_report.start_date }} a {{ weekly_report.end_date }}<br>
+                    📅 Actualizado: {{ weekly_report.updated.strftime('%d/%m/%Y %H:%M') }}<br>
+                    📄 Archivo: {{ weekly_report.report_name }}
+                </div>
+                <a href="{{ weekly_report.url }}" class="btn">Ver Reporte Completo</a>
+            </div>
+        </div>
+        {% endif %}
+
         {% else %}
         <div class="no-alerts">
             <div class="no-alerts-icon">✅</div>

@@ -48,10 +48,10 @@ class EmailService:
             logger.error(f"Error sending email: {str(e)}")
             return False
     
-    def send_weekly_alerts(self, recipients: List[str], alerts: Dict[str, List]) -> bool:
-        """Send weekly alerts email (deforestation + land_cover)"""
-        if not any(alerts.values()):
-            logger.info("No weekly alerts to send")
+    def send_weekly_alerts(self, recipients: List[str], alerts: Dict[str, List], weekly_report: Dict = None) -> bool:
+        """Send weekly alerts email (deforestation + land_cover) with optional weekly report"""
+        if not any(alerts.values()) and not weekly_report:
+            logger.info("No weekly alerts or report to send")
             return False
         
         template = self.jinja_env.get_template('weekly_alerts.html')
@@ -65,10 +65,28 @@ class EmailService:
             deforestation_count=deforestation_count,
             land_cover_count=land_cover_count,
             total_count=total_count,
-            has_alerts=total_count > 0
+            has_alerts=total_count > 0,
+            weekly_report=weekly_report,
+            has_report=weekly_report is not None
         )
         
         subject = f"Alertas Semanales SIMBYP - Deforestación y Cambios de Cobertura"
+        
+        return self.send_email(recipients, subject, html_content)
+    
+    def send_weekly_report(self, recipients: List[str], weekly_report: Dict) -> bool:
+        """Send weekly alerts report email (direct link to HTML report)"""
+        if not weekly_report:
+            logger.info("No weekly report to send")
+            return False
+        
+        template = self.jinja_env.get_template('weekly_report.html')
+        
+        html_content = template.render(
+            report=weekly_report
+        )
+        
+        subject = f"Reporte Semanal de Alertas SIMBYP - {weekly_report['start_date']} a {weekly_report['end_date']}"
         
         return self.send_email(recipients, subject, html_content)
     

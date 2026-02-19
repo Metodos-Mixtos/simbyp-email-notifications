@@ -84,3 +84,28 @@ class GCSHandler:
         except Exception as e:
             logger.error(f"Error downloading JSON from {bucket_name}/{blob_name}: {str(e)}")
             return {}
+    
+    def list_all_objects(self, bucket_name: str, prefix: str) -> List[Dict]:
+        """List all objects with a given prefix (no time filtering)"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blobs = bucket.list_blobs(prefix=prefix)
+            
+            objects = []
+            for blob in blobs:
+                obj_info = {
+                    'name': blob.name,
+                    'path': f"gs://{bucket_name}/{blob.name}",
+                    'public_url': self._get_public_url(bucket_name, blob.name),
+                    'updated': blob.updated,
+                    'size': blob.size,
+                    'is_file': not blob.name.endswith('/')
+                }
+                objects.append(obj_info)
+            
+            logger.info(f"Found {len(objects)} objects in {bucket_name}/{prefix}")
+            return sorted(objects, key=lambda x: x['updated'], reverse=True)
+        
+        except Exception as e:
+            logger.error(f"Error listing objects from {bucket_name}/{prefix}: {str(e)}")
+            return []
