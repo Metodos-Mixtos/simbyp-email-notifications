@@ -251,6 +251,7 @@ Returns a preview of what alerts would be sent (for debugging/monitoring).
 
 ### Docker
 
+**Build locally** (uses your current architecture):
 ```bash
 docker build -t simbyp-email-notifications .
 
@@ -261,25 +262,33 @@ docker run -e PORT=8080 --env-file .env simbyp-email-notifications
 docker run -e PORT=8080 -e SENDGRID_API_KEY=your-key simbyp-email-notifications
 ```
 
+**Build for GCP Cloud Run** (Linux amd64, recommended when on macOS):
+```bash
+# Using docker buildx for cross-platform builds (recommended)
+docker buildx build --platform linux/amd64 -t simbyp-email-notifications:latest .
+
+# Or push directly to GCP Container Registry
+docker buildx build --platform linux/amd64 \
+  -t gcr.io/bosques-bogota-416214/simbyp-email-notifications:latest \
+  --push .
+```
+
 ### Google Cloud Run
 
 Defaults from `src/config.py` are used automatically. You only need to set the SendGrid API key via Secret Manager:
 
 ```bash
-# 1. Create a secret in Secret Manager
-echo -n "your-sendgrid-api-key" | gcloud secrets create sendgrid-api-key --data-file=-
-
-# 2. Grant Cloud Run service account access to the secret
-gcloud secrets add-iam-policy-binding sendgrid-api-key \
+# 1. Grant Cloud Run service account access to the existing secret
+gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
   --member="serviceAccount:your-service-account@your-project.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
-# 3. Deploy with minimal env vars (only secrets)
+# 2. Deploy with the secret reference
 gcloud run deploy simbyp-email-notifications \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key" \
+  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
   --memory 256Mi \
   --timeout 300 \
   --service-account your-service-account@your-project.iam.gserviceaccount.com

@@ -1,16 +1,8 @@
 import os
+import logging
 import csv
 import io
-import logging
 from google.cloud import storage
-
-# Load .env file only if it exists (for local development)
-# GCP Cloud Run provides environment variables directly
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +11,6 @@ logger = logging.getLogger(__name__)
 # These are the standard values used across environments.
 # Override them by setting environment variables if needed.
 # ============================================================================
-
 # GCP Configuration
 GCP_PROJECT_ID = os.getenv('GCP_PROJECT_ID', 'bosques-bogota-416214')
 
@@ -36,8 +27,12 @@ PORT = int(os.getenv('PORT', 8080))
 # SECRETS & ENVIRONMENT-SPECIFIC
 # These MUST be set as environment variables or in .env (for local dev only)
 # ============================================================================
-
-SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
+# Load SendGrid API Key
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+if not SENDGRID_API_KEY:
+    logger.warning("WARNING: SENDGRID_API_KEY not found in environment")
+else:
+    logger.info(f"SENDGRID_API_KEY loaded: {SENDGRID_API_KEY[:10]}...")
 
 def _split_env_list(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]

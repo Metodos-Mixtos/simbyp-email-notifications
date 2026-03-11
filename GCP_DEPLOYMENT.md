@@ -25,7 +25,7 @@ The codebase now separates **configuration defaults** (in code) from **secrets a
 ┌─────────────────────────────────────────────────────────────────┐
 │               Secrets & Environment Overrides                    │
 │            (Environment variables / Secret Manager)              │
-│  ⚠ SENDGRID_API_KEY: sm://sendgrid-api-key                      │
+│  ⚠ SENDGRID_API_KEY: sm://SENDGRID_API_KEY                     │
 │  ⚠ GOOGLE_APPLICATION_CREDENTIALS: (auto in Cloud Run)          │
 │  ⚠ Custom overrides for other environments                       │
 └─────────────────────────────────────────────────────────────────┘
@@ -64,7 +64,7 @@ When deploying, only set variables that differ from defaults or are secrets:
 
 ```bash
 gcloud run deploy simbyp-email-notifications \
-  --set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key" \
+  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
   ...other flags
 ```
 
@@ -76,27 +76,31 @@ gcloud run deploy simbyp-email-notifications \
 - `DAYS_BACK` - Already in config
 - `PORT` - Already in config
 
-### 2. Set Up Secrets in Secret Manager
+### 2. Grant Cloud Run Service Account Access to Secret
 
-Store sensitive values:
+The secret `SENDGRID_API_KEY` already exists in Secret Manager at:
+```
+projects/548822075986/secrets/SENDGRID_API_KEY
+```
 
+Grant your Cloud Run service account access:
 ```bash
-# Create a secret for SendGrid API key
-echo -n "SG.actual-api-key..." | \
-  gcloud secrets create sendgrid-api-key --data-file=-
+# Get your service account email
+SA_EMAIL=$(gcloud run services describe simbyp-email-notifications \
+  --format='value(spec.template.spec.serviceAccountName)')
 
-# Grant Cloud Run service account access
-gcloud secrets add-iam-policy-binding sendgrid-api-key \
-  --member="serviceAccount:YOUR-SERVICE-ACCOUNT@appspot.gserviceaccount.com" \
+# Grant secret access
+gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
+  --member="serviceAccount:$SA_EMAIL" \
   --role="roles/secretmanager.secretAccessor"
 ```
 
 Reference it in your deployment:
 ```bash
---set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key"
+--set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
 ```
 
-### 3. Service Account Permissions
+### 3. Grant Other Required Permissions
 
 Assign roles to your Cloud Run service account:
 
@@ -118,18 +122,43 @@ gcloud projects add-iam-policy-binding bosques-bogota-416214 \
 
 ### 4. Example Full Deployment
 
+**Option A: Source-based deployment** (Cloud Build builds the Docker image automatically):
 ```bash
+gcloud run deploy simbyp-email-notifications \
+  --source . \
+  --platform=managed \
+  --region=us-central1 \
+  --allow-unauthenticated \
+  --memory=256Mi \
+  --cpu=1 \
+  --timeout=300 \
+  --max-instances=10 \
+  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
+  --service-account="$SA_EMAIL"
+```
+
+**Option B: Pre-built image deployment** (build and push manually):
+```bash
+# Step 1: Build and push to Container Registry
+docker buildx build --platform linux/amd64 \
+  -t gcr.io/bosques-bogota-416214/simbyp-email-notifications:latest \
+  --push .
+
+# Step 2: Deploy the image
 gcloud run deploy simbyp-email-notifications \
   --image=gcr.io/bosques-bogota-416214/simbyp-email-notifications:latest \
   --platform=managed \
   --region=us-central1 \
-  --memory=512Mi \
+  --allow-unauthenticated \
+  --memory=256Mi \
   --cpu=1 \
-  --timeout=3600 \
+  --timeout=300 \
   --max-instances=10 \
-  --set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key" \
+  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
   --service-account="$SA_EMAIL"
 ```
+
+**Recommendation**: Use Option A for simplicity. Cloud Build will automatically build the Docker image from your source code.
 
 ## Configuration Reference
 
@@ -148,12 +177,24 @@ gcloud run deploy simbyp-email-notifications \
 
 ## Troubleshooting
 
+### Docker Push Authentication Error
+If you see: `ERROR: failed to build: failed to solve: error getting credentials`
+
+**Solution**: Configure Docker to authenticate with GCP:
+```bash
+gcloud auth configure-docker gcr.io
+```
+
+Then retry the docker buildx command.
+
+**Better option**: Use source-based deployment (Option A) instead - Cloud Build handles authentication automatically and is simpler.
+
 ### Config Validation Error
 If you see: `Configuration errors: SENDGRID_API_KEY is not set`
 
 **Solution:**
 ```bash
-gcloud run deploy ... --set-env-vars="SENDGRID_API_KEY=sm://your-secret-name"
+gcloud run deploy ... --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
 ```
 
 ### Different Values per Environment  
@@ -163,14 +204,14 @@ Create environment-specific deployments:
 ```bash
 gcloud run deploy simbyp-email-notifications-prod \
   --set-env-vars="RECIPIENTS_CSV_URI=gs://prod-bucket/recipients.csv" \
-  --set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key-prod"
+  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
 ```
 
 **Staging:**
 ```bash
 gcloud run deploy simbyp-email-notifications-staging \
   --set-env-vars="RECIPIENTS_CSV_URI=gs://staging-bucket/recipients.csv" \
-  --set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key-staging"
+  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
 ```
 
 ## Best Practices
