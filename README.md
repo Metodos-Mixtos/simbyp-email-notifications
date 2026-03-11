@@ -70,6 +70,13 @@ John Doe,Analyst,Agency,1,1,john@example.com,11001
 Jane Smith,Manager,Department,1,0,jane@example.com,11002
 ```
 
+En este enlace está la lista de distribución: 
+https://docs.google.com/spreadsheets/d/1NBNmaZpirgpqpWILlv1tTC1xUlpHnwaReyJtwaKxhQ0/edit?usp=sharing
+
+La ubicación en GCS es: 
+gs://material-estatico-sdp/SIMBYP_DATA/listas_distribucion/lista_circulacion_reportes - test.csv
+
+
 The CSV loader recognizes these columns:
 - `Correo`: Email address (required)
 - `weekly_alerts`: Include in weekly deforestation/land cover alerts (1=yes)
@@ -84,33 +91,37 @@ The CSV loader recognizes these columns:
 
 ### 4. Environment Configuration
 
-Copy `.env.example` to `.env` and fill in values:
+The application uses **defaults from `src/config.py`** for non-secret configuration. You only need to set `.env` for:
+- **Secrets** (SendGrid API key)
+- **Local development** (service account key path)
+- **Overrides** (if testing with different values)
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` - typically just the API key is needed:
 
 ```dotenv
-# GCP Configuration
-GCP_PROJECT_ID=your-gcp-project-id
-RECIPIENTS_CSV_URI=gs://your-bucket/path/to/recipients.csv
+# REQUIRED: SendGrid API Key (keep secure!)
+SENDGRID_API_KEY=your-sendgrid-api-key
+
+# OPTIONAL: Google service account for local dev only
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 
-# SendGrid Configuration
-SENDGRID_API_KEY=your-api-key
-FROM_EMAIL=alerts@example.com
-FROM_NAME=SIMBYP Alertas
-
-# Fallback Recipients (comma-separated, used if CSV unavailable)
-WEEKLY_ALERTS_RECIPIENTS=user1@example.com,user2@example.com
-MONTHLY_BUILT_AREA_RECIPIENTS=admin@example.com,user3@example.com
-
-# Service Configuration
-DAYS_BACK=7
-PORT=8080
+# OPTIONAL: Override defaults if needed (most are defined in src/config.py)
+# GCP_PROJECT_ID=your-project
+# FROM_EMAIL=custom@example.com
+# RECIPIENTS_CSV_URI=gs://custom-bucket/recipients.csv
 ```
+
+**Application defaults** (defined in `src/config.py`):
+- `GCP_PROJECT_ID`: bosques-bogota-416214
+- `FROM_EMAIL`: simbyp@sdp.gov.co
+- `FROM_NAME`: SIMBYP Alertas
+- `RECIPIENTS_CSV_URI`: gs://material-estatico-sdp/...
+- `DAYS_BACK`: 20
+- `PORT`: 8080
 
 ### 5. Run Locally
 
@@ -242,26 +253,41 @@ Returns a preview of what alerts would be sent (for debugging/monitoring).
 
 ```bash
 docker build -t simbyp-email-notifications .
+
+# Run with .env file (local development)
 docker run -e PORT=8080 --env-file .env simbyp-email-notifications
+
+# Or pass only the API key and use config.py defaults
+docker run -e PORT=8080 -e SENDGRID_API_KEY=your-key simbyp-email-notifications
 ```
 
 ### Google Cloud Run
 
+Defaults from `src/config.py` are used automatically. You only need to set the SendGrid API key via Secret Manager:
+
 ```bash
+# 1. Create a secret in Secret Manager
+echo -n "your-sendgrid-api-key" | gcloud secrets create sendgrid-api-key --data-file=-
+
+# 2. Grant Cloud Run service account access to the secret
+gcloud secrets add-iam-policy-binding sendgrid-api-key \
+  --member="serviceAccount:your-service-account@your-project.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# 3. Deploy with minimal env vars (only secrets)
 gcloud run deploy simbyp-email-notifications \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars \
-    GCP_PROJECT_ID=your-project,\
-    SENDGRID_API_KEY=your-key,\
-    RECIPIENTS_CSV_URI=gs://your-bucket/recipients.csv \
+  --set-env-vars="SENDGRID_API_KEY=sm://sendgrid-api-key" \
   --memory 256Mi \
   --timeout 300 \
   --service-account your-service-account@your-project.iam.gserviceaccount.com
 ```
 
 Then create Cloud Scheduler jobs (see API Endpoints section above).
+
+For complete deployment instructions including service account roles and environment-specific configs, see [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md).
 
 ## Testing
 
@@ -289,13 +315,13 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 
 ## Troubleshooting
 
-**Issue**: "SendGrid API key not configured"
-- Verify `SENDGRID_API_KEY` is in `.env`
+**Issue**: "Configuration errors: SENDGRID_API_KEY is not set"
+- Verify `SENDGRID_API_KEY` is in `.env` (local) or set via `gcloud run deploy --set-env-vars` (Cloud Run)
 
 **Issue**: "No recipients configured"
-- Check the CSV file exists at `RECIPIENTS_CSV_URI` and is formatted correctly
+- Check the CSV file exists at `RECIPIENTS_CSV_URI` (default: gs://material-estatico-sdp/...) and is formatted correctly
 - Verify GCS service account has read permission
-- Check environment variables `WEEKLY_ALERTS_RECIPIENTS` or `MONTHLY_BUILT_AREA_RECIPIENTS`
+- Check environment variables `WEEKLY_ALERTS_RECIPIENTS` or `MONTHLY_BUILT_AREA_RECIPIENTS` if overriding CSV
 
 **Issue**: Emails not arriving
 - Confirm the sender email is verified in SendGrid
@@ -303,10 +329,16 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 
 **Issue**: GCS connection errors
 - Verify service account has Storage Object Viewer role on the bucket
-- Check `RECIPIENTS_CSV_URI` and `GCP_PROJECT_ID` are correct
+- Check `RECIPIENTS_CSV_URI` is correct (uses default from `src/config.py` if not overridden)
+- For local dev: set `GOOGLE_APPLICATION_CREDENTIALS` in `.env`
+
+**Issue**: Different configuration per environment
+- Override specific values via environment variables
+- Defaults from `src/config.py` are used for anything not explicitly set
 
 ## Notes
 
+- **Configuration Strategy**: Non-secret defaults are defined in `src/config.py` for simplicity and clarity. Only override via environment variables when needed for local testing or different environments. Secrets (like API keys) are managed in the cloud via Secret Manager.
 - **Email Duplicates**: The system no longer prevents duplicate emails. If the same alert is triggered multiple times, it may be sent multiple times to the recipients. This is intentional for simplicity.
 - **Simple & Lightweight**: No database dependency means faster deployments and lower operational overhead.
 - **Stateless**: Each service invocation is independent; no state is maintained between calls.
