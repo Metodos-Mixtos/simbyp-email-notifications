@@ -1,6 +1,6 @@
 import os
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content, Bcc
+from sendgrid.helpers.mail import Mail, Email, To, Bcc
 from jinja2 import Environment, FileSystemLoader
 import logging
 from typing import List, Dict
@@ -20,7 +20,7 @@ class EmailService:
         self.jinja_env = Environment(loader=FileSystemLoader(template_dir))
     
     def send_email(self, recipients: List[str], subject: str, html_content: str) -> bool:
-        """Send email using SendGrid"""
+        """Send email to recipients using BCC to hide recipient list from each other."""
         if not self.api_key:
             logger.error("SendGrid API key not configured")
             return False
@@ -32,16 +32,20 @@ class EmailService:
         try:
             message = Mail(
                 from_email=Email(self.from_email, self.from_name),
-                to_emails=[To(email) for email in recipients],
+                to_emails=To(self.from_email, self.from_name),  # Send to self as documented recipient
                 subject=subject,
-                html_content=Content("text/html", html_content)
+                html_content=html_content
             )
+            
+            # Add all recipients to BCC (hidden from each other)
+            for recipient in recipients:
+                message.add_bcc(Bcc(recipient))
             
             sg = SendGridAPIClient(self.api_key)
             response = sg.send(message)
             
             logger.info(f"Email sent successfully. Status: {response.status_code}")
-            logger.info(f"Recipients: {', '.join(recipients)}")
+            logger.info(f"Recipients (BCC): {', '.join(recipients)}")
             return True
         
         except Exception as e:
@@ -110,32 +114,3 @@ class EmailService:
         subject = f"Reporte Mensual de Área Construida - SIMBYP"
         
         return self.send_email(recipients, subject, html_content)
-    
-    def send_email(self, subject, html_content, recipients):
-        """
-        Send email to recipients using BCC to hide recipient list.
-        
-        Args:
-            subject: Email subject
-            html_content: HTML email body
-            recipients: List of email addresses
-        """
-        message = Mail(
-            from_email=FROM_EMAIL,
-            to_emails=FROM_EMAIL,  # Send to self, recipients in BCC
-            subject=subject,
-            html_content=html_content,
-        )
-        
-        # Add all recipients to BCC (hidden from each other)
-        for recipient in recipients:
-            message.bcc.add(Bcc(recipient))
-        
-        try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            response = sg.send(message)
-            logger.info(f"Email sent successfully. Status: {response.status_code}")
-            return response
-        except Exception as e:
-            logger.error(f"Error sending email: {e}")
-            raise

@@ -3,6 +3,7 @@ import logging
 import csv
 import io
 from google.cloud import storage
+from google.cloud import secretmanager
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +28,46 @@ PORT = int(os.getenv('PORT', 8080))
 # SECRETS & ENVIRONMENT-SPECIFIC
 # These MUST be set as environment variables or in .env (for local dev only)
 # ============================================================================
+
+def _load_secret_from_secret_manager(secret_reference: str) -> str | None:
+    """
+    Load a secret from Google Secret Manager if the reference follows the pattern:
+    projects/{project_id}/secrets/{secret_id}/versions/{version}
+    """
+    try:
+        if not secret_reference or not secret_reference.startswith("projects/"):
+            logger.debug(f"Secret reference doesn't match project pattern: {secret_reference[:20] if secret_reference else 'None'}")
+            return None
+        
+        logger.info(f"Loading secret from Secret Manager: {secret_reference[:50]}...")
+        client = secretmanager.SecretManagerServiceClient()
+        response = client.access_secret_version(request={"name": secret_reference})
+        secret_value = response.payload.data.decode("UTF-8")
+        logger.info(f"Successfully loaded secret, length: {len(secret_value)} characters")
+        return secret_value
+    except Exception as e:
+        logger.error(f"Failed to load secret from Secret Manager: {type(e).__name__}: {e}")
+        return None
+
 # Load SendGrid API Key
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-if not SENDGRID_API_KEY:
-    logger.warning("WARNING: SENDGRID_API_KEY not found in environment")
+sendgrid_api_key_env = os.getenv("SENDGRID_API_KEY", "").strip()
+logger.info(f"SENDGRID_API_KEY env var value: {sendgrid_api_key_env[:50] if sendgrid_api_key_env else 'NOT SET'}")
+
+if sendgrid_api_key_env.startswith("projects/"):
+    # It's a Secret Manager reference, load the actual secret
+    logger.info("SENDGRID_API_KEY is a Secret Manager reference, loading...")
+    SENDGRID_API_KEY = _load_secret_from_secret_manager(sendgrid_api_key_env)
+    if not SENDGRID_API_KEY:
+        logger.error("Failed to load SENDGRID_API_KEY from Secret Manager")
 else:
-    logger.info(f"SENDGRID_API_KEY loaded: {SENDGRID_API_KEY[:10]}...")
+    # It's a direct API key
+    SENDGRID_API_KEY = sendgrid_api_key_env if sendgrid_api_key_env else None
+    logger.info(f"SENDGRID_API_KEY is a direct value: {bool(SENDGRID_API_KEY)}")
+
+if not SENDGRID_API_KEY:
+    logger.warning("WARNING: SENDGRID_API_KEY not found in environment or Secret Manager")
+else:
+    logger.info(f"SENDGRID_API_KEY loaded successfully: {SENDGRID_API_KEY[:10]}...")
 
 def _split_env_list(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
@@ -55,7 +90,7 @@ def _build_distribution_lists(csv_text: str | None) -> dict[str, list[str]]:
     }
     if not csv_text:
         return groups
-    reader = csv.DictReader(io.StringIO(csv_text))
+    reader = csv.DictReader(io.StringIO(csv_text), delimiter=';')
     for row in reader:
         email = row.get("Correo", "").strip()
         if not email:

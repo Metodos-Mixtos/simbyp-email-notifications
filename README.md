@@ -86,8 +86,8 @@ The CSV loader recognizes these columns:
 
 - Sign up at [SendGrid](https://sendgrid.com)
 - Create an API Key (Settings → API Keys)
-- Add a Single Sender verification (use your verified email account)
-- Copy the API key to your `.env` file
+- Add a Single Sender verification (simbyp@sdp.gov.co or your verified email account)
+- Copy the API key to your `.env` file (local dev) or GCP Secret Manager (production)
 
 ### 4. Environment Configuration
 
@@ -275,28 +275,39 @@ docker buildx build --platform linux/amd64 \
 
 ### Google Cloud Run
 
-Defaults from `src/config.py` are used automatically. You only need to set the SendGrid API key via Secret Manager:
+Secrets are managed in GCP Secret Manager. The deployment process:
 
+**1. Grant service account access (one-time setup):**
 ```bash
-# 1. Grant Cloud Run service account access to the existing secret
+PROJECT_ID="bosques-bogota-416214"
+
 gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
-  --member="serviceAccount:your-service-account@your-project.iam.gserviceaccount.com" \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
-# 2. Deploy with the secret reference
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
+  --role="roles/storage.objectViewer"
+```
+
+**2. Deploy with secret reference:**
+
+```bash
 gcloud run deploy simbyp-email-notifications \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
-  --memory 256Mi \
-  --timeout 300 \
-  --service-account your-service-account@your-project.iam.gserviceaccount.com
+  --memory=256Mi \
+  --timeout=300 \
+  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 
-Then create Cloud Scheduler jobs (see API Endpoints section above).
+**Important**: Use the full path with `/versions/latest` (not just `/latest`). The code automatically detects and loads the secret from GCP Secret Manager.
 
-For complete deployment instructions including service account roles and environment-specific configs, see [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md).
+✅ **Status**: System tested and operational. Emails successfully sent to verified recipients.
+
+For complete deployment instructions including troubleshooting, see [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md).
 
 ## Testing
 
@@ -326,6 +337,8 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 
 **Issue**: "Configuration errors: SENDGRID_API_KEY is not set"
 - Verify `SENDGRID_API_KEY` is in `.env` (local) or set via `gcloud run deploy --set-env-vars` (Cloud Run)
+- Ensure the secret path format is correct: `projects/{project}/secrets/{secret}/versions/{version}`
+- Verify the service account has `roles/secretmanager.secretAccessor` permission on the secret
 
 **Issue**: "No recipients configured"
 - Check the CSV file exists at `RECIPIENTS_CSV_URI` (default: gs://material-estatico-sdp/...) and is formatted correctly
@@ -345,9 +358,17 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 - Override specific values via environment variables
 - Defaults from `src/config.py` are used for anything not explicitly set
 
+## Deployment Status
+
+✅ **Production Ready**: The system is deployed and tested on GCP Cloud Run (revision: 00016-xww)
+- Email sending verified with 4 test recipients
+- Recipients loaded from GCS CSV (with BCC to hide recipient list)
+- SendGrid integration tested and confirmed
+- Alerts loading from GCS buckets confirmed
+
 ## Notes
 
-- **Configuration Strategy**: Non-secret defaults are defined in `src/config.py` for simplicity and clarity. Only override via environment variables when needed for local testing or different environments. Secrets (like API keys) are managed in the cloud via Secret Manager.
+- **Configuration Strategy**: Non-secret defaults are defined in `src/config.py` for simplicity and clarity. Only override via environment variables when needed for local testing or different environments. Secrets (like API keys) are managed in the cloud via Secret Manager. The code automatically loads secrets from GCP Secret Manager if the environment variable value follows the pattern `projects/.../secrets/.../versions/...`
 - **Email Duplicates**: The system no longer prevents duplicate emails. If the same alert is triggered multiple times, it may be sent multiple times to the recipients. This is intentional for simplicity.
 - **Simple & Lightweight**: No database dependency means faster deployments and lower operational overhead.
 - **Stateless**: Each service invocation is independent; no state is maintained between calls.

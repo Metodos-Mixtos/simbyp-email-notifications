@@ -25,7 +25,7 @@ The codebase now separates **configuration defaults** (in code) from **secrets a
 ┌─────────────────────────────────────────────────────────────────┐
 │               Secrets & Environment Overrides                    │
 │            (Environment variables / Secret Manager)              │
-│  ⚠ SENDGRID_API_KEY: sm://SENDGRID_API_KEY                     │
+│  ⚠ SENDGRID_API_KEY: projects/.../secrets/.../latest           │
 │  ⚠ GOOGLE_APPLICATION_CREDENTIALS: (auto in Cloud Run)          │
 │  ⚠ Custom overrides for other environments                       │
 └─────────────────────────────────────────────────────────────────┘
@@ -58,107 +58,100 @@ The app will:
 
 ## GCP Cloud Run Deployment
 
-### 1. Set Up Environment Variables
+### 1. First Deployment: Grant Service Account Access to Secrets
 
-When deploying, only set variables that differ from defaults or are secrets:
+Before deploying, set up the service account that Cloud Run will use. The secret `SENDGRID_API_KEY` already exists in Secret Manager.
+
+**Important**: Do this FIRST, before the service exists. We'll use the default Cloud Run service account:
 
 ```bash
-gcloud run deploy simbyp-email-notifications \
-  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
-  ...other flags
-```
+# Set your project ID
+PROJECT_ID="bosques-bogota-416214"
 
-**You DON'T need to set these** (uses defaults from `src/config.py`):
-- `GCP_PROJECT_ID` - Already in config
-- `FROM_EMAIL` - Already in config  
-- `FROM_NAME` - Already in config
-- `RECIPIENTS_CSV_URI` - Already in config
-- `DAYS_BACK` - Already in config
-- `PORT` - Already in config
-
-### 2. Grant Cloud Run Service Account Access to Secret
-
-The secret `SENDGRID_API_KEY` already exists in Secret Manager at:
-```
-projects/548822075986/secrets/SENDGRID_API_KEY
-```
-
-Grant your Cloud Run service account access:
-```bash
-# Get your service account email
-SA_EMAIL=$(gcloud run services describe simbyp-email-notifications \
-  --format='value(spec.template.spec.serviceAccountName)')
-
-# Grant secret access
+# Grant the Cloud Run default service account access to SENDGRID_API_KEY secret
 gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
-  --member="serviceAccount:$SA_EMAIL" \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
-```
 
-Reference it in your deployment:
-```bash
---set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
-```
-
-### 3. Grant Other Required Permissions
-
-Assign roles to your Cloud Run service account:
-
-```bash
-# Get your service account email
-SA_EMAIL=$(gcloud run services describe simbyp-email-notifications \
-  --format='value(spec.template.spec.serviceAccountName)')
-
-# Grant storage permissions (read GCS buckets)
-gcloud projects add-iam-policy-binding bosques-bogota-416214 \
-  --member="serviceAccount:$SA_EMAIL" \
+# Also grant storage access for reading GCS buckets
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
   --role="roles/storage.objectViewer"
-
-# Grant secret access
-gcloud projects add-iam-policy-binding bosques-bogota-416214 \
-  --member="serviceAccount:$SA_EMAIL" \
-  --role="roles/secretmanager.secretAccessor"
 ```
 
-### 4. Example Full Deployment
+### 2. Deploy with Secret Reference
 
-**Option A: Source-based deployment** (Cloud Build builds the Docker image automatically):
+You have two options for handling the SENDGRID_API_KEY secret:
+
+**Option A: Using Cloud Run's built-in secret injection (RECOMMENDED)**
 ```bash
 gcloud run deploy simbyp-email-notifications \
   --source . \
-  --platform=managed \
-  --region=us-central1 \
+  --region us-central1 \
   --allow-unauthenticated \
   --memory=256Mi \
-  --cpu=1 \
   --timeout=300 \
-  --max-instances=10 \
-  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
-  --service-account="$SA_EMAIL"
+  --set-secrets="SENDGRID_API_KEY=SENDGRID_API_KEY:latest" \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 
-**Option B: Pre-built image deployment** (build and push manually):
+**Option B: Using environment variable with Secret Manager reference**
+The Python code will automatically detect and load secrets from Secret Manager if you pass the full path with proper version format:
 ```bash
-# Step 1: Build and push to Container Registry
-docker buildx build --platform linux/amd64 \
-  -t gcr.io/bosques-bogota-416214/simbyp-email-notifications:latest \
-  --push .
-
-# Step 2: Deploy the image
 gcloud run deploy simbyp-email-notifications \
-  --image=gcr.io/bosques-bogota-416214/simbyp-email-notifications:latest \
-  --platform=managed \
-  --region=us-central1 \
+  --source . \
+  --region us-central1 \
   --allow-unauthenticated \
   --memory=256Mi \
-  --cpu=1 \
   --timeout=300 \
-  --max-instances=10 \
-  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY" \
-  --service-account="$SA_EMAIL"
+  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 
-**Recommendation**: Use Option A for simplicity. Cloud Build will automatically build the Docker image from your source code.
+**Note:** The secret path format must follow: `projects/{PROJECT_ID}/secrets/{SECRET_ID}/versions/{VERSION}`
+- ✅ Correct: `projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest`
+- ❌ Wrong: `projects/548822075986/secrets/SENDGRID_API_KEY/latest`
+
+The code in `src/config.py` detects when SENDGRID_API_KEY looks like a secret reference (starts with `projects/`) and automatically loads the actual secret value from Secret Manager.
+
+**Both options work, but Option A is Cloud Run's recommended pattern.**
+
+### 3. Verify Secret Access After First Deployment
+
+After deploying, verify the service account has access:
+
+```bash
+# Get the actual service account email used
+SA_EMAIL=$(gcloud run services describe simbyp-email-notifications \
+  --region us-central1 \
+  --format='value(spec.template.spec.serviceAccountName)')
+
+echo "Service Account: $SA_EMAIL"
+
+# Verify secret access
+gcloud secrets get-iam-policy SENDGRID_API_KEY --flatten="bindings[].members" \
+  --filter="bindings.role:roles/secretmanager.secretAccessor"
+```
+
+### 4. One-Command Full Deployment
+
+```bash
+gcloud run deploy simbyp-email-notifications \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory=256Mi \
+  --timeout=300 \
+  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
+```
+```
+
+This command:
+- Builds the Docker image automatically using Cloud Build
+- Deploys to Cloud Run
+- References the secret via its full path (Cloud Run automatically injects it as an environment variable)
+- Uses the default Cloud Run service account (which you already granted permissions to)
 
 ## Configuration Reference
 
@@ -189,13 +182,28 @@ Then retry the docker buildx command.
 
 **Better option**: Use source-based deployment (Option A) instead - Cloud Build handles authentication automatically and is simpler.
 
-### Config Validation Error
-If you see: `Configuration errors: SENDGRID_API_KEY is not set`
+### Secret Not Available at Deployment Time
+If you see: `Deployment failed` or `SENDGRID_API_KEY is not set`
+
+**Causes:**
+1. Service account doesn't have Secret Manager access
+2. Secret reference path is incorrect
 
 **Solution:**
+Verify permissions are granted:
 ```bash
-gcloud run deploy ... --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
+PROJECT_ID="bosques-bogota-416214"
+
+# Grant secret access
+gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# Verify it worked
+gcloud secrets get-iam-policy SENDGRID_API_KEY
 ```
+
+Then redeploy.
 
 ### Different Values per Environment  
 Create environment-specific deployments:
@@ -227,4 +235,28 @@ gcloud run deploy simbyp-email-notifications-staging \
 - Hardcode secrets in code
 - Use environment variables for stable defaults (put in code instead)
 - Create `.env` files in production (Cloud Run won't read them)
+
+## Deployment Status
+
+✅ **Current Status**: Production Ready (Cloud Run Revision: 00016-xww)
+
+**Verified Working:**
+- Service Account: `sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com` with proper permissions
+- Secret Manager integration: Secrets automatically loaded and injected
+- Email sending: Tested and confirmed (SendGrid status HTTP 202)
+- Recipients: 4 verified recipients loaded from GCS CSV
+- Alerts: Built area alerts loading from GCS buckets
+- All endpoints operational
+
+**Latest Deployment:**
+```
+gcloud run deploy simbyp-email-notifications \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory=256Mi \
+  --timeout=300 \
+  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
+```
 
