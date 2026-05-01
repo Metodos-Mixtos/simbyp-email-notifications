@@ -1,6 +1,6 @@
 # SIMBYP Email Notifications
 
-A Flask-based email notification system that sends scheduled environmental alerts including deforestation, built area expansion, and land cover changes. Alerts are triggered on a frequency-based schedule, read from Google Cloud Storage, and delivered via SendGrid.
+A Flask-based email notification system that sends scheduled environmental alerts including deforestation, built area expansion, and land cover changes. Alerts are triggered on a frequency-based schedule, read from Google Cloud Storage, and delivered via Microsoft Graph API (Office 365/Microsoft 365).
 
 ## Features
 
@@ -11,6 +11,7 @@ A Flask-based email notification system that sends scheduled environmental alert
 - **Dynamic Recipients**: Loads recipient lists from a CSV file stored in GCS or environment variables
 - **HTML Templates**: Professionally formatted email templates for each alert type
 - **Cloud-Ready**: Containerized with Docker, deployable on Cloud Run
+- **Microsoft 365 Native**: Uses Microsoft Graph API for native Office 365 integration
 - **Simple & Lightweight**: No database dependency, lightweight deployment
 
 ## Project Structure
@@ -18,7 +19,7 @@ A Flask-based email notification system that sends scheduled environmental alert
 ```
 src/
 ├── config.py                      # Configuration and environment loading
-├── email_service.py               # SendGrid email sending logic
+├── email_service.py               # Microsoft Graph email sending logic
 ├── gcs_handler.py                 # Google Cloud Storage operations
 ├── alerts_processor.py            # Alert aggregation and processing
 ├── utils.py                       # Scheduling and utility functions
@@ -32,6 +33,7 @@ tests/
 Dockerfile                         # Container configuration
 requirements.txt                   # Python dependencies
 .env.example                       # Environment variables template
+AZURE_SETUP.md                     # Azure AD app registration guide
 ```
 
 ## Prerequisites
@@ -40,8 +42,9 @@ requirements.txt                   # Python dependencies
 - Google Cloud Project with:
   - Service account credentials (JSON key file)
   - Storage bucket with alert reports and recipient CSV
-- SendGrid account with API key
-- Email account verified with SendGrid
+- Microsoft 365 / Office 365 tenant with:
+  - Azure AD admin access for app registration
+  - Email account `simbyp@sdp.gov.co` in the tenant
 
 ## Setup Instructions
 
@@ -82,29 +85,39 @@ The CSV loader recognizes these columns:
 - `weekly_alerts`: Include in weekly deforestation/land cover alerts (1=yes)
 - `monthly_built_area`: Include in monthly built area reports (1=yes)
 
-### 3. SendGrid Setup
+### 3. Azure AD Setup
 
-- Sign up at [SendGrid](https://sendgrid.com)
-- Create an API Key (Settings → API Keys)
-- Add a Single Sender verification (simbyp@sdp.gov.co or your verified email account)
-- Copy the API key to your `.env` file (local dev) or GCP Secret Manager (production)
+**See [AZURE_SETUP.md](AZURE_SETUP.md) for complete Azure AD app registration instructions.**
+
+Quick summary:
+1. Register an app in Azure AD
+2. Create a client secret
+3. Grant `Mail.Send` permission in Microsoft Graph
+4. Save your credentials:
+   - Application (client) ID
+   - Directory (tenant) ID
+   - Client Secret
 
 ### 4. Environment Configuration
 
-The application uses **defaults from `src/config.py`** for non-secret configuration. You only need to set `.env` for:
-- **Secrets** (SendGrid API key)
-- **Local development** (service account key path)
-- **Overrides** (if testing with different values)
+The application uses **defaults from `src/config.py`** for non-secret configuration and follows a **3-tier secrets loading pattern**:
+
+**Tier 1:** Direct environment variables (runtime)  
+**Tier 2:** Variables from `.env` file (local dev)  
+**Tier 3:** Google Secret Manager (cloud)  
+**Tier 4:** Cloud Run secret mounts (fallback)
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` - typically just the API key is needed:
+Edit `.env` - required for local development:
 
 ```dotenv
-# REQUIRED: SendGrid API Key (keep secure!)
-SENDGRID_API_KEY=your-sendgrid-api-key
+# REQUIRED: Azure AD Credentials (keep secure!)
+AZURE_CLIENT_ID=your-client-id
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_SECRET=your-client-secret
 
 # OPTIONAL: Google service account for local dev only
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
@@ -258,8 +271,12 @@ docker build -t simbyp-email-notifications .
 # Run with .env file (local development)
 docker run -e PORT=8080 --env-file .env simbyp-email-notifications
 
-# Or pass only the API key and use config.py defaults
-docker run -e PORT=8080 -e SENDGRID_API_KEY=your-key simbyp-email-notifications
+# Or pass credentials directly
+docker run -e PORT=8080 \
+  -e AZURE_CLIENT_ID=your-id \
+  -e AZURE_TENANT_ID=your-tenant \
+  -e AZURE_CLIENT_SECRET=your-secret \
+  simbyp-email-notifications
 ```
 
 **Build for GCP Cloud Run** (Linux amd64, recommended when on macOS):
@@ -275,22 +292,32 @@ docker buildx build --platform linux/amd64 \
 
 ### Google Cloud Run
 
-Secrets are managed in GCP Secret Manager. The deployment process:
+Azure AD credentials are managed in GCP Secret Manager. The deployment process:
 
-**1. Grant service account access (one-time setup):**
+**1. Store credentials in GCP Secret Manager (one-time setup):**
+```bash
+gcloud secrets create AZURE_CLIENT_ID --replication-policy="automatic" --data-file=- <<< "YOUR_CLIENT_ID"
+gcloud secrets create AZURE_TENANT_ID --replication-policy="automatic" --data-file=- <<< "YOUR_TENANT_ID"
+gcloud secrets create AZURE_CLIENT_SECRET --replication-policy="automatic" --data-file=- <<< "YOUR_CLIENT_SECRET"
+```
+
+**2. Grant service account access to secrets (one-time setup):**
 ```bash
 PROJECT_ID="bosques-bogota-416214"
+SERVICE_ACCOUNT="sa-bosques-app@${PROJECT_ID}.iam.gserviceaccount.com"
 
-gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
-  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
+for secret in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_CLIENT_SECRET; do
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member="serviceAccount:${SERVICE_ACCOUNT}" \
+    --role="roles/secretmanager.secretAccessor"
+done
 
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
   --role="roles/storage.objectViewer"
 ```
 
-**2. Deploy with secret reference:**
+**3. Deploy with secrets (Option A - Environment Variables with Secret Manager references):**
 
 ```bash
 gcloud run deploy simbyp-email-notifications \
@@ -299,13 +326,38 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
-  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
-  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
+  --set-env-vars \
+    AZURE_CLIENT_ID=projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest,\
+    AZURE_TENANT_ID=projects/548822075986/secrets/AZURE_TENANT_ID/versions/latest,\
+    AZURE_CLIENT_SECRET=projects/548822075986/secrets/AZURE_CLIENT_SECRET/versions/latest \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com" \
+  --project=bosques-bogota-416214
 ```
 
-**Important**: Use the full path with `/versions/latest` (not just `/latest`). The code automatically detects and loads the secret from GCP Secret Manager.
+**3b. Deploy with secrets (Option B - Cloud Run Secret Mounts - recommended):**
 
-✅ **Status**: System tested and operational. Emails successfully sent to verified recipients.
+```bash
+gcloud run deploy simbyp-email-notifications \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory=256Mi \
+  --timeout=300 \
+  --set-secrets \
+    AZURE_CLIENT_ID=AZURE_CLIENT_ID:latest,\
+    AZURE_TENANT_ID=AZURE_TENANT_ID:latest,\
+    AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest \
+  --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com" \
+  --project=bosques-bogota-416214
+```
+
+**3-Tier Secrets Loading**: The code automatically detects where secrets come from:
+- **Tier 1**: Environment variables (direct values)
+- **Tier 2**: .env file (local development only)
+- **Tier 3**: Google Secret Manager (if value is `projects/.../secrets/.../versions/...`)
+- **Tier 4**: Cloud Run secret mounts (if using `--set-secrets`)
+
+✅ **Status**: System tested and operational. Emails successfully sent to recipients via Microsoft 365.
 
 For complete deployment instructions including troubleshooting, see [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md).
 
@@ -335,10 +387,15 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 
 ## Troubleshooting
 
-**Issue**: "Configuration errors: SENDGRID_API_KEY is not set"
-- Verify `SENDGRID_API_KEY` is in `.env` (local) or set via `gcloud run deploy --set-env-vars` (Cloud Run)
-- Ensure the secret path format is correct: `projects/{project}/secrets/{secret}/versions/{version}`
-- Verify the service account has `roles/secretmanager.secretAccessor` permission on the secret
+**Issue**: "Missing Azure AD credentials"
+- Verify `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` are set
+- Check in `.env` (local) or via `gcloud secrets list` (Cloud Run)
+- Follow [AZURE_SETUP.md](AZURE_SETUP.md) to ensure app is registered correctly
+
+**Issue**: "Authentication_RequestDenied" or "Insufficient privileges"
+- Verify app has `Mail.Send` permission in Microsoft Graph
+- Check that admin consent was granted (see AZURE_SETUP.md step 3.7)
+- Service account needs permissions to send emails on behalf of `simbyp@sdp.gov.co`
 
 **Issue**: "No recipients configured"
 - Check the CSV file exists at `RECIPIENTS_CSV_URI` (default: gs://material-estatico-sdp/...) and is formatted correctly
@@ -346,8 +403,9 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 - Check environment variables `WEEKLY_ALERTS_RECIPIENTS` or `MONTHLY_BUILT_AREA_RECIPIENTS` if overriding CSV
 
 **Issue**: Emails not arriving
-- Confirm the sender email is verified in SendGrid
-- Check SendGrid Activity Feed for bounce/delivery errors
+- Check Azure AD audit logs for send failures
+- Verify `simbyp@sdp.gov.co` email exists in Microsoft 365
+- Confirm recipient email addresses are valid
 
 **Issue**: GCS connection errors
 - Verify service account has Storage Object Viewer role on the bucket
@@ -355,20 +413,25 @@ The recipient list is loaded from a CSV file in Google Cloud Storage. The file i
 - For local dev: set `GOOGLE_APPLICATION_CREDENTIALS` in `.env`
 
 **Issue**: Different configuration per environment
-- Override specific values via environment variables
+- Override specific values via environment variables (Tier 1)
+- Use `.env` for local development (Tier 2)
+- Use Google Secret Manager for cloud deployments (Tier 3)
 - Defaults from `src/config.py` are used for anything not explicitly set
 
 ## Deployment Status
 
-✅ **Production Ready**: The system is deployed and tested on GCP Cloud Run (revision: 00016-xww)
-- Email sending verified with 4 test recipients
+✅ **Production Ready**: The system is deployed and tested on GCP Cloud Run
+- Email sending verified with Microsoft Graph API
 - Recipients loaded from GCS CSV (with BCC to hide recipient list)
-- SendGrid integration tested and confirmed
+- Microsoft 365 integration tested and confirmed
 - Alerts loading from GCS buckets confirmed
+- 3-tier secrets loading pattern implemented
 
 ## Notes
 
-- **Configuration Strategy**: Non-secret defaults are defined in `src/config.py` for simplicity and clarity. Only override via environment variables when needed for local testing or different environments. Secrets (like API keys) are managed in the cloud via Secret Manager. The code automatically loads secrets from GCP Secret Manager if the environment variable value follows the pattern `projects/.../secrets/.../versions/...`
+- **Configuration Strategy**: Non-secret defaults are defined in `src/config.py` for simplicity and clarity. Secrets follow a 3-tier loading pattern: direct environment → .env file → Google Secret Manager. The code automatically detects where each secret comes from and loads it accordingly.
+- **Email Delivery**: Uses Microsoft Graph API with service account authentication (application permissions). Emails are sent on behalf of `simbyp@sdp.gov.co` using the organization's Microsoft 365 tenant.
+- **BCC Privacy**: Recipients are added to BCC to hide them from each other while preserving email delivery traceability.
 - **Email Duplicates**: The system no longer prevents duplicate emails. If the same alert is triggered multiple times, it may be sent multiple times to the recipients. This is intentional for simplicity.
 - **Simple & Lightweight**: No database dependency means faster deployments and lower operational overhead.
 - **Stateless**: Each service invocation is independent; no state is maintained between calls.

@@ -1,24 +1,31 @@
-from flask import Flask, request, jsonify
+# Configure logging FIRST - before importing config module
 import logging
-from src.config import GCP_PROJECT_ID, RECIPIENTS, PORT
-from src.gcs_handler import GCSHandler
-from src.alerts_processor import AlertProcessor
-from src.email_service import EmailService
-from src import utils
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# Now import config and other modules
+from flask import Flask, request, jsonify
+from src.config import GCP_PROJECT_ID, RECIPIENTS, PORT, AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET, FROM_EMAIL, FROM_NAME
+from src.gcs_handler import GCSHandler
+from src.alerts_processor import AlertProcessor
+from src.email_service import EmailService
+from src import utils
+
 app = Flask(__name__)
 
 # Initialize services
 gcs_handler = GCSHandler(GCP_PROJECT_ID)
 alert_processor = AlertProcessor(gcs_handler)
-email_service = EmailService()
+email_service = EmailService(
+    client_id=AZURE_CLIENT_ID,
+    tenant_id=AZURE_TENANT_ID,
+    client_secret=AZURE_CLIENT_SECRET,
+    from_email=FROM_EMAIL,
+    from_name=FROM_NAME
+)
 
 @app.route('/')
 def health_check():
@@ -45,7 +52,7 @@ def send_weekly_alerts():
                 'status': 'skipped',
                 'message': 'No weekly report found',
                 'report': None
-            }), 204
+            }), 200
         
         # Get recipients
         recipients = RECIPIENTS.get('weekly_alerts_recipients', [])
@@ -99,7 +106,7 @@ def send_monthly_built_area():
                 'status': 'skipped',
                 'message': 'No built area alerts found',
                 'alerts': 0
-            }), 204
+            }), 200
         
         # Get recipients
         recipients = RECIPIENTS.get('monthly_built_area_recipients', [])

@@ -1,52 +1,106 @@
 import os
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Bcc
-from jinja2 import Environment, FileSystemLoader
 import logging
 from typing import List, Dict
-
-from src.config import SENDGRID_API_KEY, FROM_EMAIL, FROM_NAME
+from jinja2 import Environment, FileSystemLoader
+import requests
+from azure.identity import ClientSecretCredential
 
 logger = logging.getLogger(__name__)
 
 class EmailService:
-    def __init__(self):
-        self.api_key = SENDGRID_API_KEY
-        self.from_email = FROM_EMAIL
-        self.from_name = FROM_NAME
+    def __init__(self, client_id: str, tenant_id: str, client_secret: str, from_email: str, from_name: str):
+        """Initialize Microsoft Graph email service using service account (app credentials)."""
+        self.from_email = from_email
+        self.from_name = from_name
+        self.client_id = client_id
+        self.tenant_id = tenant_id
+        self.client_secret = client_secret
         
         # Setup Jinja2 for templates
         template_dir = os.path.join(os.path.dirname(__file__), 'templates')
         self.jinja_env = Environment(loader=FileSystemLoader(template_dir))
+        
+        # Initialize Azure credentials
+        self.credential = ClientSecretCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        logger.info(f"EmailService initialized with from_email: {from_email}")
+    
+    def _get_access_token(self) -> str | None:
+        """Get access token from Azure AD."""
+        try:
+            token = self.credential.get_token("https://graph.microsoft.com/.default")
+            logger.debug("Successfully obtained Azure AD access token")
+            return token.token
+        except Exception as e:
+            logger.error(f"Failed to get access token: {str(e)}")
+            return None
     
     def send_email(self, recipients: List[str], subject: str, html_content: str) -> bool:
-        """Send email to recipients using BCC to hide recipient list from each other."""
-        if not self.api_key:
-            logger.error("SendGrid API key not configured")
-            return False
-        
+        """Send email to recipients using Microsoft Graph API with BCC to hide recipient list."""
         if not recipients:
             logger.warning("No recipients specified")
             return False
         
         try:
-            message = Mail(
-                from_email=Email(self.from_email, self.from_name),
-                to_emails=To(self.from_email, self.from_name),  # Send to self as documented recipient
-                subject=subject,
-                html_content=html_content
-            )
+            access_token = self._get_access_token()
+            if not access_token:
+                logger.error("Failed to obtain access token for Microsoft Graph")
+                return False
             
-            # Add all recipients to BCC (hidden from each other)
-            for recipient in recipients:
-                message.add_bcc(Bcc(recipient))
+            # Microsoft Graph API endpoint
+            url = f"https://graph.microsoft.com/v1.0/users/{self.from_email}/sendMail"
             
-            sg = SendGridAPIClient(self.api_key)
-            response = sg.send(message)
+            # Prepare email body with BCC recipients to hide them from each other
+            email_body = {
+                "message": {
+                    "subject": subject,
+                    "body": {
+                        "contentType": "HTML",
+                        "content": html_content
+                    },
+                    "from": {
+                        "emailAddress": {
+                            "address": self.from_email,
+                            "name": self.from_name
+                        }
+                    },
+                    "toRecipients": [
+                        {
+                            "emailAddress": {
+                                "address": self.from_email,
+                                "name": self.from_name
+                            }
+                        }
+                    ],
+                    "bccRecipients": [
+                        {
+                            "emailAddress": {
+                                "address": recipient
+                            }
+                        } for recipient in recipients
+                    ]
+                },
+                "saveToSentItems": True
+            }
             
-            logger.info(f"Email sent successfully. Status: {response.status_code}")
-            logger.info(f"Recipients (BCC): {', '.join(recipients)}")
-            return True
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(url, json=email_body, headers=headers)
+            
+            if response.status_code == 202:
+                logger.info(f"Email sent successfully to {len(recipients)} recipients (BCC)")
+                logger.info(f"Recipients (BCC): {', '.join(recipients)}")
+                return True
+            else:
+                logger.error(f"Failed to send email: HTTP {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                return False
         
         except Exception as e:
             logger.error(f"Error sending email: {str(e)}")
@@ -102,15 +156,10 @@ class EmailService:
         
         template = self.jinja_env.get_template('built_area_alert.html')
         
-        # Extract UPL data from alert
-        top_upls = alert_data.get('top_upls', [])
-        
         html_content = template.render(
-            alert=alert_data,
-            top_upls=top_upls,
-            has_upls=len(top_upls) > 0
+            alert_data=alert_data
         )
         
-        subject = f"Reporte Mensual de Área Construida - SIMBYP"
+        subject = f"Reporte Mensual - Alertas de Área Construida SIMBYP"
         
         return self.send_email(recipients, subject, html_content)
