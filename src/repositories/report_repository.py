@@ -62,7 +62,7 @@ class ReportRepository:
             report_date=report_date or date.today(),
             recipient_count=len(recipient_emails),
             status='sent',
-            metadata=metadata
+            metadata_json=metadata
         )
         self.session.add(report)
         self.session.flush()  # Get report ID
@@ -105,7 +105,7 @@ class ReportRepository:
             report_title=report_title,
             status='failed',
             error_message=error_message,
-            metadata=metadata
+            metadata_json=metadata
         )
         self.session.add(report)
         self.session.flush()
@@ -303,7 +303,7 @@ class ReportRepository:
         if existing:
             # Update existing
             existing.alert_count = alert_count
-            existing.metadata = metadata
+            existing.metadata_json = metadata
             self.session.flush()
             logger.info(f"Updated alert stat: {date} {alert_type}/{alert_source} = {alert_count}")
             return existing
@@ -315,7 +315,7 @@ class ReportRepository:
                 alert_source=alert_source,
                 alert_count=alert_count,
                 municipality_code=municipality_code,
-                metadata=metadata
+                metadata_json=metadata
             )
             self.session.add(stat)
             self.session.flush()

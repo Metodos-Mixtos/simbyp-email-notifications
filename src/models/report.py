@@ -40,7 +40,7 @@ class ReportSent(Base):
     recipient_count = Column(Integer, default=0)
     status = Column(String(20), default='sent', index=True)
     error_message = Column(Text, nullable=True)
-    metadata = Column(JSONB, nullable=True)
+    metadata_json = Column('metadata', JSONB, nullable=True)
     
     # Constraints
     __table_args__ = (
@@ -77,7 +77,7 @@ class ReportSent(Base):
             'recipient_count': self.recipient_count,
             'status': self.status,
             'error_message': self.error_message,
-            'metadata': self.metadata,
+            'metadata': self.metadata_json,
         }
     
     def mark_as_sent(self, recipient_count: int) -> None:
@@ -107,7 +107,7 @@ class ReportSent(Base):
             report_title=report_title,
             report_url=report_url,
             report_date=report_date or date.today(),
-            metadata=metadata
+            metadata_json=metadata
         )
     
     @classmethod
@@ -119,5 +119,5 @@ class ReportSent(Base):
             report_title=report_title,
             report_url=report_url,
             report_date=report_date or date.today(),
-            metadata=metadata
+            metadata_json=metadata
         )

@@ -3,6 +3,10 @@
 let allUsers = [];
 let currentEditUserId = null;
 
+function isValidUuid(value) {
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadUsers();
@@ -171,16 +175,28 @@ async function saveUser(event) {
     };
     
     const isEdit = currentEditUserId !== null;
-    const url = isEdit ? `/api/users/${currentEditUserId}` : '/api/users';
+    if (isEdit && !isValidUuid(currentEditUserId)) {
+        showToast('Error: Invalid user ID for update', 'danger');
+        return;
+    }
+
+    const endpoint = isEdit
+        ? `/api/users/${encodeURIComponent(currentEditUserId)}`
+        : '/api/users';
     const method = isEdit ? 'PUT' : 'POST';
+    const requestUrl = new URL(endpoint, window.location.origin).toString();
     
-    const saveButton = event.target;
-    const spinner = saveButton.querySelector('.loading');
+    const saveButton = event.currentTarget || document.getElementById('saveUserButton');
+    const spinner = saveButton ? saveButton.querySelector('.loading') : null;
+    if (!saveButton || !spinner) {
+        showToast('Error: Save button is not available', 'danger');
+        return;
+    }
     spinner.classList.add('show');
     saveButton.disabled = true;
     
     try {
-        const response = await fetch(url, {
+        const response = await fetch(requestUrl, {
             method: method,
             headers: {
                 'Content-Type': 'application/json'

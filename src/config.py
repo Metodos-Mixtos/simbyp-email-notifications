@@ -134,6 +134,16 @@ if not DATABASE_URL:
 else:
     logger.info("✓ Database configuration loaded successfully")
 
+# Database mode toggle (backward compatibility with routes expecting DB_ENABLED)
+# Priority: explicit DB_ENABLED env var, then infer from DATABASE_URL availability.
+_db_enabled_env = os.getenv('DB_ENABLED', '').strip().lower()
+if _db_enabled_env in {'1', 'true', 'yes', 'on'}:
+    DB_ENABLED = True
+elif _db_enabled_env in {'0', 'false', 'no', 'off'}:
+    DB_ENABLED = False
+else:
+    DB_ENABLED = bool(DATABASE_URL)
+
 # ============================================================================
 # MICROSOFT GRAPH CREDENTIALS (using 3-tier loading)
 # ============================================================================

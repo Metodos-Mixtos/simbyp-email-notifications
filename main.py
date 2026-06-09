@@ -19,7 +19,7 @@ from src.alerts_processor import AlertProcessor
 from src.email_service import EmailService
 from src import utils
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='src/static', static_url_path='/static')
 app.config['JSON_SORT_KEYS'] = False
 
 # Database is required - initialize connection
@@ -357,7 +357,7 @@ def admin_interface():
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="saveUser(event)">
+                        <button type="button" class="btn btn-primary" id="saveUserButton" onclick="saveUser(event)">
                             <span class="spinner-border spinner-border-sm loading" role="status"></span>
                             Save
                         </button>

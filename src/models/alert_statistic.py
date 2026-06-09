@@ -32,7 +32,7 @@ class AlertStatistic(Base):
     alert_source = Column(String(50), nullable=True, index=True)
     alert_count = Column(Integer, default=0)
     municipality_code = Column(String(10), nullable=True, index=True)
-    metadata = Column(JSONB, nullable=True)
+    metadata_json = Column('metadata', JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Unique constraint: one stat per date/type/source/municipality combination
@@ -56,7 +56,7 @@ class AlertStatistic(Base):
             'alert_source': self.alert_source,
             'alert_count': self.alert_count,
             'municipality_code': self.municipality_code,
-            'metadata': self.metadata,
+            'metadata': self.metadata_json,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
     
@@ -69,7 +69,7 @@ class AlertStatistic(Base):
             alert_source='gfw',
             alert_count=alert_count,
             municipality_code=municipality_code,
-            metadata=metadata
+            metadata_json=metadata
         )
     
     @classmethod
@@ -81,7 +81,7 @@ class AlertStatistic(Base):
             alert_source='psa',
             alert_count=alert_count,
             municipality_code=municipality_code,
-            metadata=metadata
+            metadata_json=metadata
         )
     
     @classmethod
@@ -93,5 +93,5 @@ class AlertStatistic(Base):
             alert_source='urban_sprawl',
             alert_count=alert_count,
             municipality_code=municipality_code,
-            metadata=metadata
+            metadata_json=metadata
         )
