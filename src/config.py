@@ -126,6 +126,21 @@ DAYS_BACK = int(os.getenv('DAYS_BACK', 20))
 PORT = int(os.getenv('PORT', 8080))
 
 # ============================================================================
+# DATABASE CONFIGURATION (using 3-tier loading)
+# ============================================================================
+DATABASE_URL = _load_secret_tiered('DATABASE_URL')
+DB_ENABLED = os.getenv('DB_ENABLED', 'false').lower() == 'true'
+
+if DB_ENABLED:
+    if DATABASE_URL:
+        logger.info("✓ Database configuration loaded (DB_ENABLED=true)")
+    else:
+        logger.warning("✗ DB_ENABLED=true but DATABASE_URL not found - will fall back to CSV")
+        DB_ENABLED = False
+else:
+    logger.info("Database disabled (DB_ENABLED=false) - using CSV for recipients")
+
+# ============================================================================
 # MICROSOFT GRAPH CREDENTIALS (using 3-tier loading)
 # ============================================================================
 AZURE_CLIENT_ID = _load_secret_tiered('AZURE_CLIENT_ID')
