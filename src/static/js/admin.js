@@ -138,7 +138,7 @@ async function editUser(userId) {
 }
 
 // Save user (create or update)
-async function saveUser() {
+async function saveUser(event) {
     const form = document.getElementById('userForm');
     
     if (!form.checkValidity()) {

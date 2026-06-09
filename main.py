@@ -371,7 +371,7 @@ def admin_interface():
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="saveUser()">
+                        <button type="button" class="btn btn-primary" onclick="saveUser(event)">
                             <span class="spinner-border spinner-border-sm loading" role="status"></span>
                             Save
                         </button>
