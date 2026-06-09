@@ -9,3 +9,8 @@ pytest-cov==4.1.0
 pytz
 azure-identity==1.14.0
 requests==2.31.0
+
+# Database dependencies
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1

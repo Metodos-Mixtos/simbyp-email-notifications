@@ -8,13 +8,31 @@ logger = logging.getLogger(__name__)
 
 # Now import config and other modules
 from flask import Flask, request, jsonify
-from src.config import GCP_PROJECT_ID, RECIPIENTS, PORT, AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET, FROM_EMAIL, FROM_NAME
+from src.config import (
+    GCP_PROJECT_ID, RECIPIENTS, PORT, 
+    AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET, 
+    FROM_EMAIL, FROM_NAME,
+    DB_ENABLED, DATABASE_URL
+)
 from src.gcs_handler import GCSHandler
 from src.alerts_processor import AlertProcessor
 from src.email_service import EmailService
 from src import utils
 
 app = Flask(__name__)
+
+# Initialize database if enabled
+if DB_ENABLED and DATABASE_URL:
+    logger.info("Initializing database connection...")
+    from src.database import init_db
+    try:
+        init_db(DATABASE_URL, pool_size=5, max_overflow=10)
+        logger.info("✓ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"✗ Failed to initialize database: {e}", exc_info=True)
+        logger.warning("Falling back to CSV-based recipient management")
+else:
+    logger.info("Database not enabled, using CSV-based recipient management")
 
 # Initialize services
 gcs_handler = GCSHandler(GCP_PROJECT_ID)
@@ -30,7 +48,65 @@ email_service = EmailService(
 @app.route('/')
 def health_check():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'service': 'simbyp-email-notifications'}), 200
+    from src.config import DB_ENABLED
+    
+    health_status = {
+        'status': 'healthy',
+        'service': 'simbyp-email-notifications',
+        'database': {
+            'enabled': DB_ENABLED
+        }
+    }
+    
+    if DB_ENABLED:
+        try:
+            from src.database import check_db_health
+            db_healthy, db_message = check_db_health()
+            health_status['database']['status'] = 'healthy' if db_healthy else 'unhealthy'
+            health_status['database']['message'] = db_message
+        except Exception as e:
+            health_status['database']['status'] = 'error'
+            health_status['database']['message'] = str(e)
+    
+    return jsonify(health_status), 200
+
+@app.route('/health/db', methods=['GET'])
+def database_health():
+    """Database health check endpoint"""
+    from src.config import DB_ENABLED, DATABASE_URL
+    
+    if not DB_ENABLED:
+        return jsonify({
+            'status': 'disabled',
+            'message': 'Database is not enabled (DB_ENABLED=false)'
+        }), 200
+    
+    if not DATABASE_URL:
+        return jsonify({
+            'status': 'error',
+            'message': 'DATABASE_URL not configured'
+        }), 500
+    
+    try:
+        from src.database import check_db_health
+        is_healthy, message = check_db_health()
+        
+        if is_healthy:
+            return jsonify({
+                'status': 'healthy',
+                'message': message
+            }), 200
+        else:
+            return jsonify({
+                'status': 'unhealthy',
+                'message': message
+            }), 503
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/send-weekly-alerts', methods=['POST'])
 def send_weekly_alerts():
