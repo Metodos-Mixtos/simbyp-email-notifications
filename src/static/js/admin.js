@@ -23,6 +23,8 @@ async function loadUsers() {
         const response = await fetch('/api/users');
         const result = await response.json();
         
+        spinner.style.display = 'none';
+        
         if (!result.success) {
             showToast('Error loading users: ' + result.error, 'danger');
             return;
@@ -30,8 +32,6 @@ async function loadUsers() {
         
         allUsers = result.data;
         renderUsers(allUsers);
-        
-        spinner.style.display = 'none';
         
         if (allUsers.length === 0) {
             emptyState.style.display = 'block';
@@ -139,9 +139,12 @@ async function editUser(userId) {
 
 // Save user (create or update)
 async function saveUser(event) {
+    event.preventDefault();
+    
     const form = document.getElementById('userForm');
     
     if (!form.checkValidity()) {
+        event.stopPropagation();
         form.reportValidity();
         return;
     }
