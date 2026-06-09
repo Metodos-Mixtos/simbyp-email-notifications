@@ -20,7 +20,7 @@
   - Session management with context managers
   - Database health check endpoint (`/health/db`)
   - 3-tier credentials loading (env → .env → Secret Manager)
-  - Feature flag `DB_ENABLED` to toggle database vs CSV mode
+  - **Database-only mode** (PostgreSQL required for operation)
 
 ### Phase 2: Data Access Layer (100% Complete)
 - ✅ **ORM Models** (`src/models/`)

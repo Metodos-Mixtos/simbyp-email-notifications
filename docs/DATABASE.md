@@ -187,9 +187,6 @@ DB_PORT=5432
 DB_NAME=simbyp_db
 DB_USER=simbyp_app
 DB_PASSWORD=your_password
-
-# Feature flag
-DB_ENABLED=true
 ```
 
 ### Connection Strings

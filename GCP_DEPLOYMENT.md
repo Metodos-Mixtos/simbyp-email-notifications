@@ -103,6 +103,7 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
+  --set-secrets="DATABASE_URL=DATABASE_URL:latest" \
   --set-secrets="AZURE_CLIENT_ID=AZURE_CLIENT_ID:latest" \
   --set-secrets="AZURE_TENANT_ID=AZURE_TENANT_ID:latest" \
   --set-secrets="AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest" \
@@ -118,6 +119,7 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
+  --set-env-vars="DATABASE_URL=projects/548822075986/secrets/DATABASE_URL/versions/latest" \
   --set-env-vars="AZURE_CLIENT_ID=projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest" \
   --set-env-vars="AZURE_TENANT_ID=projects/548822075986/secrets/AZURE_TENANT_ID/versions/latest" \
   --set-env-vars="AZURE_CLIENT_SECRET=projects/548822075986/secrets/AZURE_CLIENT_SECRET/versions/latest" \
@@ -158,18 +160,18 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
+  --set-env-vars="DATABASE_URL=projects/548822075986/secrets/DATABASE_URL/versions/latest" \
   --set-env-vars="AZURE_CLIENT_ID=projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest" \
   --set-env-vars="AZURE_TENANT_ID=projects/548822075986/secrets/AZURE_TENANT_ID/versions/latest" \
   --set-env-vars="AZURE_CLIENT_SECRET=projects/548822075986/secrets/AZURE_CLIENT_SECRET/versions/latest" \
   --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
-```
 
 This command:
 - Builds the Docker image automatically using Cloud Build
 - Deploys to Cloud Run
-- References the secret via its full path (Cloud Run automatically injects it as an environment variable)
-- Uses the default Cloud Run service account (which you already granted permissions to)
+- References the secrets via their full paths (Cloud Run automatically injects them as environment variables)
+- Uses the specified service account (which you already granted permissions to)
 
 ## Configuration Reference
 
@@ -178,13 +180,12 @@ This command:
 | `GCP_PROJECT_ID` | `bosques-bogota-416214` | No* | Code |
 | `FROM_EMAIL` | `simbyp@sdp.gov.co` | No | Code |
 | `FROM_NAME` | `SIMBYP Alertas` | No | Code |
-| `RECIPIENTS_CSV_URI` | GCS URI as shown | No* | Code |
 | `DAYS_BACK` | `20` | No | Code |
 | `PORT` | `8080` | No | Code |
+| `DATABASE_URL` | None | **Yes** | Secret Manager |
 | `AZURE_CLIENT_ID` | None | **Yes** | Secret Manager |
 | `AZURE_TENANT_ID` | None | **Yes** | Secret Manager |
 | `AZURE_CLIENT_SECRET` | None | **Yes** | Secret Manager |
-| `VALIDATE_CONFIG` | `true` | No | Code |
 
 *Can be overridden via environment variables if needed for different environments
 
