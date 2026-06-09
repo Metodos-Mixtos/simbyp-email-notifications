@@ -20,6 +20,7 @@ from src.email_service import EmailService
 from src import utils
 
 app = Flask(__name__)
+app.config['JSON_SORT_KEYS'] = False
 
 # Initialize database if enabled
 if DB_ENABLED and DATABASE_URL:
@@ -245,6 +246,373 @@ def test_alerts():
     except Exception as e:
         logger.error(f"Error in test_alerts: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# ADMIN USER MANAGEMENT API
+# ============================================================================
+
+@app.route('/admin')
+def admin_interface():
+    """Admin interface for user management"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({
+            'error': 'Database not enabled',
+            'message': 'DB_ENABLED must be true to use admin interface'
+        }), 503
+    
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>User Management - SIMBYP Email Notifications</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            .loading { display: none; }
+            .loading.show { display: inline-block; }
+            .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+            .subscription-badge { margin: 2px; }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar navbar-dark bg-primary">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">SIMBYP User Management</span>
+            </div>
+        </nav>
+        
+        <div class="container mt-4">
+            <div class="row mb-3">
+                <div class="col">
+                    <h2>Email Recipients</h2>
+                </div>
+                <div class="col text-end">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetUserForm()">
+                        <i class="bi bi-plus-circle"></i> Add User
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <input type="text" id="searchInput" class="form-control" placeholder="Search by email or name...">
+                    </div>
+                    
+                    <div id="loadingSpinner" class="text-center py-4">
+                        <div class="spinner-border" role="status"></div>
+                    </div>
+                    
+                    <div id="userTableContainer" style="display: none;">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Department</th>
+                                    <th>Municipality</th>
+                                    <th>Subscriptions</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userTableBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="emptyState" class="text-center py-4" style="display: none;">
+                        <p class="text-muted">No users found. Click "Add User" to create one.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- User Modal -->
+        <div class="modal fade" id="userModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalTitle">Add User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="userForm">
+                            <input type="hidden" id="userId">
+                            <div class="mb-3">
+                                <label for="userEmail" class="form-label">Email *</label>
+                                <input type="email" class="form-control" id="userEmail" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="userName" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="userName">
+                            </div>
+                            <div class="mb-3">
+                                <label for="userDepartment" class="form-label">Department</label>
+                                <input type="text" class="form-control" id="userDepartment">
+                            </div>
+                            <div class="mb-3">
+                                <label for="userMunicipality" class="form-label">Municipality Code</label>
+                                <input type="text" class="form-control" id="userMunicipality" placeholder="e.g., 11001">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Subscriptions</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="subWeekly" value="weekly_alerts">
+                                    <label class="form-check-label" for="subWeekly">Weekly Alerts (Deforestation + Land Cover)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="subMonthly" value="monthly_built_area">
+                                    <label class="form-check-label" for="subMonthly">Monthly Built Area</label>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="saveUser()">
+                            <span class="spinner-border spinner-border-sm loading" role="status"></span>
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Toast Container -->
+        <div class="toast-container"></div>
+        
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="/static/js/admin.js"></script>
+    </body>
+    </html>
+    """
+
+@app.route('/api/users', methods=['GET'])
+def list_users():
+    """List all users with pagination"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        from src.database import get_db_session
+        from src.repositories.user_repository import UserRepository
+        
+        offset = request.args.get('offset', 0, type=int)
+        limit = request.args.get('limit', 100, type=int)
+        
+        with get_db_session() as session:
+            user_repo = UserRepository(session)
+            users = user_repo.list_all(offset=offset, limit=limit)
+            total = user_repo.count()
+            
+            users_data = []
+            for user in users:
+                user_dict = user.to_dict()
+                user_dict['subscriptions'] = user.get_active_subscription_types()
+                users_data.append(user_dict)
+            
+            return jsonify({
+                'success': True,
+                'data': users_data,
+                'total': total,
+                'offset': offset,
+                'limit': limit
+            }), 200
+    
+    except Exception as e:
+        logger.error(f"Error listing users: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/users', methods=['POST'])
+def create_user():
+    """Create a new user"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        from src.database import get_db_session
+        from src.repositories.user_repository import UserRepository
+        from src.repositories.subscription_repository import SubscriptionRepository
+        
+        data = request.get_json()
+        
+        if not data or not data.get('email'):
+            return jsonify({'success': False, 'error': 'Email is required'}), 400
+        
+        with get_db_session() as session:
+            user_repo = UserRepository(session)
+            sub_repo = SubscriptionRepository(session)
+            
+            # Create user
+            user = user_repo.create(
+                email=data['email'],
+                name=data.get('name'),
+                department=data.get('department'),
+                municipality_code=data.get('municipality_code')
+            )
+            
+            # Handle subscriptions
+            subscriptions = data.get('subscriptions', [])
+            for alert_type in subscriptions:
+                if alert_type in ['weekly_alerts', 'monthly_built_area']:
+                    sub_repo.subscribe(user.id, alert_type, performed_by='admin_ui')
+            
+            session.commit()
+            
+            user_dict = user.to_dict()
+            user_dict['subscriptions'] = user.get_active_subscription_types()
+            
+            return jsonify({
+                'success': True,
+                'data': user_dict,
+                'message': 'User created successfully'
+            }), 201
+    
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error creating user: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/users/<user_id>', methods=['GET'])
+def get_user(user_id):
+    """Get a specific user"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        from uuid import UUID
+        from src.database import get_db_session
+        from src.repositories.user_repository import UserRepository
+        
+        user_uuid = UUID(user_id)
+        
+        with get_db_session() as session:
+            user_repo = UserRepository(session)
+            user = user_repo.get_with_subscriptions(user_uuid)
+            
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            user_dict = user.to_dict()
+            user_dict['subscriptions'] = user.get_active_subscription_types()
+            
+            return jsonify({'success': True, 'data': user_dict}), 200
+    
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid user ID format'}), 400
+    except Exception as e:
+        logger.error(f"Error getting user: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/users/<user_id>', methods=['PUT'])
+def update_user(user_id):
+    """Update a user"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        from uuid import UUID
+        from src.database import get_db_session
+        from src.repositories.user_repository import UserRepository
+        from src.repositories.subscription_repository import SubscriptionRepository
+        
+        user_uuid = UUID(user_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        with get_db_session() as session:
+            user_repo = UserRepository(session)
+            sub_repo = SubscriptionRepository(session)
+            
+            # Update user fields
+            update_fields = {k: v for k, v in data.items() 
+                           if k in ['email', 'name', 'department', 'municipality_code']}
+            
+            user = user_repo.update(user_uuid, **update_fields)
+            
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            # Handle subscriptions if provided
+            if 'subscriptions' in data:
+                new_subscriptions = set(data['subscriptions'])
+                current_subscriptions = set(user.get_active_subscription_types())
+                
+                # Subscribe to new ones
+                for alert_type in new_subscriptions - current_subscriptions:
+                    if alert_type in ['weekly_alerts', 'monthly_built_area']:
+                        sub_repo.subscribe(user.id, alert_type, performed_by='admin_ui')
+                
+                # Unsubscribe from removed ones
+                for alert_type in current_subscriptions - new_subscriptions:
+                    sub_repo.unsubscribe(user.id, alert_type, performed_by='admin_ui')
+            
+            session.commit()
+            
+            # Refresh user to get updated subscriptions
+            session.refresh(user)
+            user_dict = user.to_dict()
+            user_dict['subscriptions'] = user.get_active_subscription_types()
+            
+            return jsonify({
+                'success': True,
+                'data': user_dict,
+                'message': 'User updated successfully'
+            }), 200
+    
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error updating user: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/users/<user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    """Delete a user"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        from uuid import UUID
+        from src.database import get_db_session
+        from src.repositories.user_repository import UserRepository
+        
+        user_uuid = UUID(user_id)
+        
+        with get_db_session() as session:
+            user_repo = UserRepository(session)
+            deleted = user_repo.delete(user_uuid)
+            
+            if not deleted:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'User deleted successfully'
+            }), 200
+    
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid user ID format'}), 400
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=False)

@@ -9,10 +9,11 @@ A Flask-based email notification system that sends scheduled environmental alert
   - Monthly email (first Friday): Built area expansion alerts
 - **Cloud Storage Integration**: Reads alert reports from Google Cloud Storage
 - **Dynamic Recipients**: Loads recipient lists from a CSV file stored in GCS or environment variables
+- **Admin User Management**: Browser-based interface for managing email recipients and subscriptions
+- **Database Support**: PostgreSQL integration for user and subscription management
 - **HTML Templates**: Professionally formatted email templates for each alert type
 - **Cloud-Ready**: Containerized with Docker, deployable on Cloud Run
 - **Microsoft 365 Native**: Uses Microsoft Graph API for native Office 365 integration
-- **Simple & Lightweight**: No database dependency, lightweight deployment
 
 ## Project Structure
 
@@ -144,6 +145,80 @@ python main.py
 
 The app runs on `http://localhost:8080`
 
+## Admin User Management Interface
+
+The system includes a browser-based admin interface for managing email recipients when database mode is enabled.
+
+### Accessing the Admin Interface
+
+1. **Enable database mode** by setting environment variables:
+   ```bash
+   DB_ENABLED=true
+   DATABASE_URL=postgresql://user:password@host:port/database
+   ```
+
+2. **Run the database migrations** to create the required tables:
+   ```bash
+   # Connect to your PostgreSQL database and run:
+   psql -d your_database -f migrations/001_initial_schema.sql
+   psql -d your_database -f migrations/002_reports_tracking.sql
+   ```
+
+3. **Start the application** and navigate to:
+   ```
+   http://localhost:8080/admin
+   ```
+
+### Features
+
+The admin interface provides a complete user management system:
+
+- **User Management**:
+  - Create new email recipients with details (email, name, department, municipality)
+  - Edit existing users
+  - Delete users (cascades to subscriptions and audit logs)
+  - Search/filter users by email, name, or department
+
+- **Subscription Management**:
+  - **Weekly Alerts**: Subscribe users to weekly deforestation and land cover alerts
+  - **Monthly Built Area**: Subscribe users to monthly built area expansion reports
+  - Toggle subscriptions on/off per user
+  - Visual badges showing active subscriptions
+
+- **Real-time Updates**:
+  - All changes immediately applied to the database
+  - Toast notifications for success/error feedback
+  - Automatic table refresh after operations
+
+### User Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| Email | Yes | User's email address (must be unique) |
+| Name | No | User's full name |
+| Department | No | Department or organization |
+| Municipality Code | No | Colombian municipality DIVIPOLA code (e.g., 11001 for Bogotá) |
+| Subscriptions | No | Weekly Alerts and/or Monthly Built Area |
+
+### Database vs CSV Mode
+
+The system supports two recipient management modes:
+
+**Database Mode** (recommended for production):
+- Enable with `DB_ENABLED=true`
+- Recipients stored in PostgreSQL
+- Admin interface available at `/admin`
+- Supports audit logging and subscription management
+- Provides user search and filtering
+
+**CSV Mode** (legacy):
+- Reads recipients from GCS CSV file
+- Simple setup, no database required
+- No admin interface
+- Limited to email and basic flags
+
+To use database mode, ensure migrations are applied and `DATABASE_URL` is configured.
+
 ## API Endpoints
 
 ### Health Check
@@ -152,7 +227,7 @@ The app runs on `http://localhost:8080`
 GET /
 ```
 
-Returns service status.
+Returns service status and database health (if enabled).
 
 ### Send Weekly Alerts
 
@@ -259,6 +334,57 @@ Returns a preview of what alerts would be sent (for debugging/monitoring).
   }
 }
 ```
+
+### Admin User Management API
+
+When database mode is enabled (`DB_ENABLED=true`), the following API endpoints are available:
+
+#### List Users
+```bash
+GET /api/users?offset=0&limit=100
+```
+
+Returns paginated list of all users with their subscriptions.
+
+#### Create User
+```bash
+POST /api/users
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "name": "John Doe",
+  "department": "Planning",
+  "municipality_code": "11001",
+  "subscriptions": ["weekly_alerts", "monthly_built_area"]
+}
+```
+
+#### Get User
+```bash
+GET /api/users/{user_id}
+```
+
+Returns details for a specific user.
+
+#### Update User
+```bash
+PUT /api/users/{user_id}
+Content-Type: application/json
+
+{
+  "email": "newemail@example.com",
+  "name": "Jane Doe",
+  "subscriptions": ["weekly_alerts"]
+}
+```
+
+#### Delete User
+```bash
+DELETE /api/users/{user_id}
+```
+
+Deletes user and all associated subscriptions and audit logs.
 
 ## Deployment
 
