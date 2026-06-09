@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 # Now import config and other modules
 from flask import Flask, request, jsonify
 from src.config import (
-    GCP_PROJECT_ID, RECIPIENTS, PORT, 
+    GCP_PROJECT_ID, PORT, 
     AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET, 
     FROM_EMAIL, FROM_NAME,
-    DB_ENABLED, DATABASE_URL
+    DATABASE_URL
 )
 from src.gcs_handler import GCSHandler
 from src.alerts_processor import AlertProcessor
@@ -22,18 +22,19 @@ from src import utils
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 
-# Initialize database if enabled
-if DB_ENABLED and DATABASE_URL:
-    logger.info("Initializing database connection...")
-    from src.database import init_db
-    try:
-        init_db(DATABASE_URL, pool_size=5, max_overflow=10)
-        logger.info("✓ Database initialized successfully")
-    except Exception as e:
-        logger.error(f"✗ Failed to initialize database: {e}", exc_info=True)
-        logger.warning("Falling back to CSV-based recipient management")
-else:
-    logger.info("Database not enabled, using CSV-based recipient management")
+# Database is required - initialize connection
+if not DATABASE_URL:
+    logger.error("DATABASE_URL is not configured")
+    raise RuntimeError(
+        "DATABASE_URL is required. The application now requires a PostgreSQL database. "
+        "Please set DATABASE_URL environment variable. "
+        "See docs/CLOUD_SQL_SETUP.md for setup instructions."
+    )
+
+logger.info("Initializing database connection...")
+from src.database import init_db
+init_db(DATABASE_URL, pool_size=5, max_overflow=10)
+logger.info("✓ Database initialized successfully")
 
 # Initialize services
 gcs_handler = GCSHandler(GCP_PROJECT_ID)
@@ -49,45 +50,28 @@ email_service = EmailService(
 @app.route('/')
 def health_check():
     """Health check endpoint"""
-    from src.config import DB_ENABLED
-    
     health_status = {
         'status': 'healthy',
         'service': 'simbyp-email-notifications',
         'database': {
-            'enabled': DB_ENABLED
+            'enabled': True
         }
     }
     
-    if DB_ENABLED:
-        try:
-            from src.database import check_db_health
-            db_healthy, db_message = check_db_health()
-            health_status['database']['status'] = 'healthy' if db_healthy else 'unhealthy'
-            health_status['database']['message'] = db_message
-        except Exception as e:
-            health_status['database']['status'] = 'error'
-            health_status['database']['message'] = str(e)
+    try:
+        from src.database import check_db_health
+        db_healthy, db_message = check_db_health()
+        health_status['database']['status'] = 'healthy' if db_healthy else 'unhealthy'
+        health_status['database']['message'] = db_message
+    except Exception as e:
+        health_status['database']['status'] = 'error'
+        health_status['database']['message'] = str(e)
     
     return jsonify(health_status), 200
 
 @app.route('/health/db', methods=['GET'])
 def database_health():
     """Database health check endpoint"""
-    from src.config import DB_ENABLED, DATABASE_URL
-    
-    if not DB_ENABLED:
-        return jsonify({
-            'status': 'disabled',
-            'message': 'Database is not enabled (DB_ENABLED=false)'
-        }), 200
-    
-    if not DATABASE_URL:
-        return jsonify({
-            'status': 'error',
-            'message': 'DATABASE_URL not configured'
-        }), 500
-    
     try:
         from src.database import check_db_health
         is_healthy, message = check_db_health()
@@ -131,8 +115,13 @@ def send_weekly_alerts():
                 'report': None
             }), 200
         
-        # Get recipients
-        recipients = RECIPIENTS.get('weekly_alerts_recipients', [])
+        # Get recipients from database
+        from src.database import get_db_session
+        from src.repositories.subscription_repository import SubscriptionRepository
+        
+        with get_db_session() as session:
+            sub_repo = SubscriptionRepository(session)
+            recipients = sub_repo.get_recipients_by_alert_type('weekly_alerts')
         
         if not recipients:
             logger.warning("No recipients configured for weekly alerts")
@@ -185,8 +174,13 @@ def send_monthly_built_area():
                 'alerts': 0
             }), 200
         
-        # Get recipients
-        recipients = RECIPIENTS.get('monthly_built_area_recipients', [])
+        # Get recipients from database
+        from src.database import get_db_session
+        from src.repositories.subscription_repository import SubscriptionRepository
+        
+        with get_db_session() as session:
+            sub_repo = SubscriptionRepository(session)
+            recipients = sub_repo.get_recipients_by_alert_type('monthly_built_area')
         
         if not recipients:
             logger.warning("No recipients configured for monthly built area")
@@ -254,14 +248,6 @@ def test_alerts():
 @app.route('/admin')
 def admin_interface():
     """Admin interface for user management"""
-    from src.config import DB_ENABLED
-    
-    if not DB_ENABLED:
-        return jsonify({
-            'error': 'Database not enabled',
-            'message': 'DB_ENABLED must be true to use admin interface'
-        }), 503
-    
     return """
     <!DOCTYPE html>
     <html>
@@ -392,11 +378,6 @@ def admin_interface():
 @app.route('/api/users', methods=['GET'])
 def list_users():
     """List all users with pagination"""
-    from src.config import DB_ENABLED
-    
-    if not DB_ENABLED:
-        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
-    
     try:
         from src.database import get_db_session
         from src.repositories.user_repository import UserRepository

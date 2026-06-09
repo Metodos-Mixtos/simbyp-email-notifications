@@ -1,9 +1,6 @@
 import os
 import logging
-import csv
-import io
-from dotenv import load_dotenv  # ← ADD THIS
-from google.cloud import storage
+from dotenv import load_dotenv
 from google.cloud import secretmanager
 
 # Load .env file FIRST (before any other config loading)
@@ -119,7 +116,6 @@ GCP_PROJECT_ID = os.getenv('GCP_PROJECT_ID', 'bosques-bogota-416214')
 # Email Configuration - Default values for SIMBYP alerts
 FROM_EMAIL = os.getenv('FROM_EMAIL', 'simbyp@sdp.gov.co')
 FROM_NAME = os.getenv('FROM_NAME', 'SIMBYP Alertas')
-RECIPIENTS_CSV_URI = os.getenv('RECIPIENTS_CSV_URI', 'gs://material-estatico-sdp/SIMBYP_DATA/listas_distribucion/lista_circulacion_reportes - test.csv').strip()
 
 # Service Configuration
 DAYS_BACK = int(os.getenv('DAYS_BACK', 20))
@@ -129,16 +125,14 @@ PORT = int(os.getenv('PORT', 8080))
 # DATABASE CONFIGURATION (using 3-tier loading)
 # ============================================================================
 DATABASE_URL = _load_secret_tiered('DATABASE_URL')
-DB_ENABLED = os.getenv('DB_ENABLED', 'false').lower() == 'true'
 
-if DB_ENABLED:
-    if DATABASE_URL:
-        logger.info("✓ Database configuration loaded (DB_ENABLED=true)")
-    else:
-        logger.warning("✗ DB_ENABLED=true but DATABASE_URL not found - will fall back to CSV")
-        DB_ENABLED = False
+if not DATABASE_URL:
+    logger.error("✗ DATABASE_URL not found")
+    logger.error("  The application requires a PostgreSQL database.")
+    logger.error("  Please set DATABASE_URL environment variable or configure it in Google Secret Manager.")
+    logger.error("  See docs/CLOUD_SQL_SETUP.md for setup instructions.")
 else:
-    logger.info("Database disabled (DB_ENABLED=false) - using CSV for recipients")
+    logger.info("✓ Database configuration loaded successfully")
 
 # ============================================================================
 # MICROSOFT GRAPH CREDENTIALS (using 3-tier loading)
@@ -151,49 +145,6 @@ if AZURE_CLIENT_ID and AZURE_TENANT_ID and AZURE_CLIENT_SECRET:
     logger.info("✓ Azure AD credentials loaded successfully")
 else:
     logger.error(f"✗ Missing Azure AD credentials: client_id={bool(AZURE_CLIENT_ID)}, tenant_id={bool(AZURE_TENANT_ID)}, client_secret={bool(AZURE_CLIENT_SECRET)}")
-
-# ============================================================================
-# HELPER FUNCTIONS FOR CSV & RECIPIENTS
-# ============================================================================
-def _split_env_list(raw: str) -> list[str]:
-    return [item.strip() for item in raw.split(",") if item.strip()]
-
-def _download_recipients_csv() -> str | None:
-    if not RECIPIENTS_CSV_URI:
-        return None
-    if not RECIPIENTS_CSV_URI.startswith("gs://"):
-        logger.error("RECIPIENTS_CSV_URI must start with gs://")
-        return None
-    bucket_name, blob_name = RECIPIENTS_CSV_URI[5:].split("/", 1)
-    client = storage.Client()
-    blob = client.bucket(bucket_name).blob(blob_name)
-    return blob.download_as_text(encoding="utf-8")
-
-def _build_distribution_lists(csv_text: str | None) -> dict[str, list[str]]:
-    groups = {
-        "weekly_alerts_recipients": [],
-        "monthly_built_area_recipients": [],
-    }
-    if not csv_text:
-        return groups
-    reader = csv.DictReader(io.StringIO(csv_text), delimiter=';')
-    for row in reader:
-        email = row.get("Correo", "").strip()
-        if not email:
-            continue
-        if row.get("weekly_alerts") == "1":
-            groups["weekly_alerts_recipients"].append(email)
-        if row.get("monthly_built_area") == "1":
-            groups["monthly_built_area_recipients"].append(email)
-    return groups
-
-# Load recipients from CSV, fallback to env vars
-RECIPIENTS = _build_distribution_lists(_download_recipients_csv())
-if not any(RECIPIENTS.values()):
-    RECIPIENTS = {
-        "weekly_alerts_recipients": _split_env_list(os.getenv("WEEKLY_ALERTS_RECIPIENTS", "")),
-        "monthly_built_area_recipients": _split_env_list(os.getenv("MONTHLY_BUILT_AREA_RECIPIENTS", "")),
-    }
 
 # GCS Configuration (bucket names and object prefixes)
 GCS_BUCKETS = {

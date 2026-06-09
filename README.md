@@ -8,10 +8,8 @@ A Flask-based email notification system that sends scheduled environmental alert
   - Weekly email (every Tuesday): Deforestation (GFW) + Land Cover (PSA) alerts
   - Monthly email (first Friday): Built area expansion alerts
 - **Cloud Storage Integration**: Reads alert reports from Google Cloud Storage
-- **Dual Recipient Management Modes**:
-  - **Database Mode** (recommended): PostgreSQL for dynamic user management with subscriptions
-  - **CSV Mode** (legacy): Reads recipients from GCS CSV file
-- **Admin User Management**: Browser-based interface for managing email recipients and subscriptions (database mode)
+- **Database-Driven Recipient Management**: PostgreSQL for dynamic user management with subscriptions
+- **Admin User Management**: Browser-based interface for managing email recipients and subscriptions
 - **Database Support**: PostgreSQL integration with ORM models and repository pattern
 - **HTML Templates**: Professionally formatted email templates for each alert type
 - **Cloud-Ready**: Containerized with Docker, deployable on Cloud Run
@@ -62,13 +60,13 @@ AZURE_SETUP.md                     # Azure AD app registration guide
 ## Prerequisites
 
 - Python 3.11+
+- **PostgreSQL 15+** (required for recipient management)
 - Google Cloud Project with:
   - Service account credentials (JSON key file)
-  - Storage bucket with alert reports and recipient CSV
+  - Storage bucket with alert reports
 - Microsoft 365 / Office 365 tenant with:
   - Azure AD admin access for app registration
   - Email account `simbyp@sdp.gov.co` in the tenant
-- PostgreSQL 15+ (optional, for database mode; falls back to CSV if not configured)
 
 ## Setup Instructions
 
@@ -82,34 +80,35 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Google Cloud Setup
+### 2. Database Setup
+
+**PostgreSQL is required.** See [docs/CLOUD_SQL_SETUP.md](docs/CLOUD_SQL_SETUP.md) for detailed setup instructions.
+
+Quick setup for local development:
+
+```bash
+# Install PostgreSQL (example for macOS)
+brew install postgresql
+
+# Start PostgreSQL
+brew services start postgresql
+
+# Create database
+createdb simbyp
+
+# Run migrations
+psql simbyp < migrations/001_initial_schema.sql
+psql simbyp < migrations/002_reports_tracking.sql
+```
+
+### 3. Google Cloud Setup
 
 ```bash
 # Create a service account and download the JSON key
 export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account-key.json"
 ```
 
-Prepare a CSV file in your GCS bucket with recipient data. Example:
-
-```csv
-Nombre,Cargo,Entidad,weekly_alerts,monthly_built_area,Correo,Municipio
-John Doe,Analyst,Agency,1,1,john@example.com,11001
-Jane Smith,Manager,Department,1,0,jane@example.com,11002
-```
-
-En este enlace está la lista de distribución: 
-https://docs.google.com/spreadsheets/d/1NBNmaZpirgpqpWILlv1tTC1xUlpHnwaReyJtwaKxhQ0/edit?usp=sharing
-
-La ubicación en GCS es: 
-gs://material-estatico-sdp/SIMBYP_DATA/listas_distribucion/lista_circulacion_reportes - test.csv
-
-
-The CSV loader recognizes these columns:
-- `Correo`: Email address (required)
-- `weekly_alerts`: Include in weekly deforestation/land cover alerts (1=yes)
-- `monthly_built_area`: Include in monthly built area reports (1=yes)
-
-### 3. Azure AD Setup
+### 4. Azure AD Setup
 
 **See [AZURE_SETUP.md](AZURE_SETUP.md) for complete Azure AD app registration instructions.**
 
@@ -121,6 +120,8 @@ Quick summary:
    - Application (client) ID
    - Directory (tenant) ID
    - Client Secret
+
+### 4. Environment Configuration
 
 ### 4. Environment Configuration
 
@@ -145,24 +146,21 @@ AZURE_CLIENT_ID=your-client-id
 AZURE_TENANT_ID=your-tenant-id
 AZURE_CLIENT_SECRET=your-client-secret
 
+# REQUIRED: Database connection
+DATABASE_URL=postgresql://user:password@localhost:5432/simbyp
+
 # OPTIONAL: Google service account for local dev only
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-
-# OPTIONAL: Database configuration (enables admin interface)
-DB_ENABLED=true
-DATABASE_URL=postgresql://user:password@localhost:5432/simbyp
 
 # OPTIONAL: Override defaults if needed (most are defined in src/config.py)
 # GCP_PROJECT_ID=your-project
 # FROM_EMAIL=custom@example.com
-# RECIPIENTS_CSV_URI=gs://custom-bucket/recipients.csv
 ```
 
 **Application defaults** (defined in `src/config.py`):
 - `GCP_PROJECT_ID`: bosques-bogota-416214
 - `FROM_EMAIL`: simbyp@sdp.gov.co
 - `FROM_NAME`: SIMBYP Alertas
-- `RECIPIENTS_CSV_URI`: gs://material-estatico-sdp/SIMBYP_DATA/listas_distribucion/lista_circulacion_reportes - test.csv
 - `DAYS_BACK`: 20
 - `PORT`: 8080
 
@@ -176,15 +174,11 @@ The app runs on `http://localhost:8080`
 
 ## Admin User Management Interface
 
-The system includes a fully-functional browser-based admin interface for managing email recipients and subscriptions when database mode is enabled.
+The system includes a fully-functional browser-based admin interface for managing email recipients and subscriptions.
 
 ### Accessing the Admin Interface
 
-1. **Enable database mode** by setting environment variables:
-   ```bash
-   DB_ENABLED=true
-   DATABASE_URL=postgresql://user:password@host:port/database
-   ```
+1. **Set up the database** (see setup instructions above)
 
 2. **Run the database migrations** to create the required tables:
    ```bash
