@@ -25,7 +25,9 @@ The codebase now separates **configuration defaults** (in code) from **secrets a
 ┌─────────────────────────────────────────────────────────────────┐
 │               Secrets & Environment Overrides                    │
 │            (Environment variables / Secret Manager)              │
-│  ⚠ SENDGRID_API_KEY: projects/.../secrets/.../latest           │
+│  ⚠ AZURE_CLIENT_ID: projects/.../secrets/.../latest            │
+│  ⚠ AZURE_TENANT_ID: projects/.../secrets/.../latest            │
+│  ⚠ AZURE_CLIENT_SECRET: projects/.../secrets/.../latest        │
 │  ⚠ GOOGLE_APPLICATION_CREDENTIALS: (auto in Cloud Run)          │
 │  ⚠ Custom overrides for other environments                       │
 └─────────────────────────────────────────────────────────────────┘
@@ -37,7 +39,9 @@ Your `.env` file should only contain **secrets** and **environment-specific over
 
 ```dotenv
 # ./env (LOCAL DEV ONLY - never commit secrets!)
-SENDGRID_API_KEY=your-actual-key
+AZURE_CLIENT_ID=your-azure-client-id
+AZURE_TENANT_ID=your-azure-tenant-id
+AZURE_CLIENT_SECRET=your-azure-client-secret
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 
 # Optional: override defaults if needed
@@ -60,7 +64,7 @@ The app will:
 
 ### 1. First Deployment: Grant Service Account Access to Secrets
 
-Before deploying, set up the service account that Cloud Run will use. The secret `SENDGRID_API_KEY` already exists in Secret Manager.
+Before deploying, set up the service account that Cloud Run will use. The secrets for Azure AD credentials should exist in Secret Manager.
 
 **Important**: Do this FIRST, before the service exists. We'll use the default Cloud Run service account:
 
@@ -68,8 +72,16 @@ Before deploying, set up the service account that Cloud Run will use. The secret
 # Set your project ID
 PROJECT_ID="bosques-bogota-416214"
 
-# Grant the Cloud Run default service account access to SENDGRID_API_KEY secret
-gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
+# Grant the Cloud Run default service account access to Azure AD secrets
+gcloud secrets add-iam-policy-binding AZURE_CLIENT_ID \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding AZURE_TENANT_ID \
+  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding AZURE_CLIENT_SECRET \
   --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
@@ -81,7 +93,7 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
 
 ### 2. Deploy with Secret Reference
 
-You have two options for handling the SENDGRID_API_KEY secret:
+You have two options for handling Azure AD credentials:
 
 **Option A: Using Cloud Run's built-in secret injection (RECOMMENDED)**
 ```bash
@@ -91,11 +103,13 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
-  --set-secrets="SENDGRID_API_KEY=SENDGRID_API_KEY:latest" \
+  --set-secrets="AZURE_CLIENT_ID=AZURE_CLIENT_ID:latest" \
+  --set-secrets="AZURE_TENANT_ID=AZURE_TENANT_ID:latest" \
+  --set-secrets="AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest" \
   --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 
-**Option B: Using environment variable with Secret Manager reference**
+**Option B: Using environment variables with Secret Manager reference**
 The Python code will automatically detect and load secrets from Secret Manager if you pass the full path with proper version format:
 ```bash
 gcloud run deploy simbyp-email-notifications \
@@ -104,15 +118,17 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
-  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --set-env-vars="AZURE_CLIENT_ID=projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest" \
+  --set-env-vars="AZURE_TENANT_ID=projects/548822075986/secrets/AZURE_TENANT_ID/versions/latest" \
+  --set-env-vars="AZURE_CLIENT_SECRET=projects/548822075986/secrets/AZURE_CLIENT_SECRET/versions/latest" \
   --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 
 **Note:** The secret path format must follow: `projects/{PROJECT_ID}/secrets/{SECRET_ID}/versions/{VERSION}`
-- ✅ Correct: `projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest`
-- ❌ Wrong: `projects/548822075986/secrets/SENDGRID_API_KEY/latest`
+- ✅ Correct: `projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest`
+- ❌ Wrong: `projects/548822075986/secrets/AZURE_CLIENT_ID/latest`
 
-The code in `src/config.py` detects when SENDGRID_API_KEY looks like a secret reference (starts with `projects/`) and automatically loads the actual secret value from Secret Manager.
+The code in `src/config.py` detects when values look like secret references (start with `projects/`) and automatically loads the actual secret value from Secret Manager.
 
 **Both options work, but Option A is Cloud Run's recommended pattern.**
 
@@ -128,8 +144,8 @@ SA_EMAIL=$(gcloud run services describe simbyp-email-notifications \
 
 echo "Service Account: $SA_EMAIL"
 
-# Verify secret access
-gcloud secrets get-iam-policy SENDGRID_API_KEY --flatten="bindings[].members" \
+# Verify secret access for Azure credentials
+gcloud secrets get-iam-policy AZURE_CLIENT_ID --flatten="bindings[].members" \
   --filter="bindings.role:roles/secretmanager.secretAccessor"
 ```
 
@@ -142,7 +158,9 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
-  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --set-env-vars="AZURE_CLIENT_ID=projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest" \
+  --set-env-vars="AZURE_TENANT_ID=projects/548822075986/secrets/AZURE_TENANT_ID/versions/latest" \
+  --set-env-vars="AZURE_CLIENT_SECRET=projects/548822075986/secrets/AZURE_CLIENT_SECRET/versions/latest" \
   --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 ```
@@ -163,7 +181,9 @@ This command:
 | `RECIPIENTS_CSV_URI` | GCS URI as shown | No* | Code |
 | `DAYS_BACK` | `20` | No | Code |
 | `PORT` | `8080` | No | Code |
-| `SENDGRID_API_KEY` | None | **Yes** | Secret Manager |
+| `AZURE_CLIENT_ID` | None | **Yes** | Secret Manager |
+| `AZURE_TENANT_ID` | None | **Yes** | Secret Manager |
+| `AZURE_CLIENT_SECRET` | None | **Yes** | Secret Manager |
 | `VALIDATE_CONFIG` | `true` | No | Code |
 
 *Can be overridden via environment variables if needed for different environments
@@ -183,7 +203,7 @@ Then retry the docker buildx command.
 **Better option**: Use source-based deployment (Option A) instead - Cloud Build handles authentication automatically and is simpler.
 
 ### Secret Not Available at Deployment Time
-If you see: `Deployment failed` or `SENDGRID_API_KEY is not set`
+If you see: `Deployment failed` or Azure credentials errors
 
 **Causes:**
 1. Service account doesn't have Secret Manager access
@@ -194,13 +214,15 @@ Verify permissions are granted:
 ```bash
 PROJECT_ID="bosques-bogota-416214"
 
-# Grant secret access
-gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
-  --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
+# Grant secret access to all Azure AD secrets
+for SECRET in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_CLIENT_SECRET; do
+  gcloud secrets add-iam-policy-binding $SECRET \
+    --member="serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+done
 
 # Verify it worked
-gcloud secrets get-iam-policy SENDGRID_API_KEY
+gcloud secrets get-iam-policy AZURE_CLIENT_ID
 ```
 
 Then redeploy.
@@ -212,14 +234,18 @@ Create environment-specific deployments:
 ```bash
 gcloud run deploy simbyp-email-notifications-prod \
   --set-env-vars="RECIPIENTS_CSV_URI=gs://prod-bucket/recipients.csv" \
-  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
+  --set-secrets="AZURE_CLIENT_ID=AZURE_CLIENT_ID:latest" \
+  --set-secrets="AZURE_TENANT_ID=AZURE_TENANT_ID:latest" \
+  --set-secrets="AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest"
 ```
 
 **Staging:**
 ```bash
 gcloud run deploy simbyp-email-notifications-staging \
   --set-env-vars="RECIPIENTS_CSV_URI=gs://staging-bucket/recipients.csv" \
-  --set-env-vars="SENDGRID_API_KEY=sm://SENDGRID_API_KEY"
+  --set-secrets="AZURE_CLIENT_ID=AZURE_CLIENT_ID:latest" \
+  --set-secrets="AZURE_TENANT_ID=AZURE_TENANT_ID:latest" \
+  --set-secrets="AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest"
 ```
 
 ## Best Practices
@@ -243,7 +269,7 @@ gcloud run deploy simbyp-email-notifications-staging \
 **Verified Working:**
 - Service Account: `sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com` with proper permissions
 - Secret Manager integration: Secrets automatically loaded and injected
-- Email sending: Tested and confirmed (SendGrid status HTTP 202)
+- Email sending: Tested and confirmed (Microsoft Graph API status HTTP 202)
 - Recipients: 4 verified recipients loaded from GCS CSV
 - Alerts: Built area alerts loading from GCS buckets
 - All endpoints operational
@@ -256,7 +282,9 @@ gcloud run deploy simbyp-email-notifications \
   --allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
-  --set-env-vars="SENDGRID_API_KEY=projects/548822075986/secrets/SENDGRID_API_KEY/versions/latest" \
+  --set-env-vars="AZURE_CLIENT_ID=projects/548822075986/secrets/AZURE_CLIENT_ID/versions/latest" \
+  --set-env-vars="AZURE_TENANT_ID=projects/548822075986/secrets/AZURE_TENANT_ID/versions/latest" \
+  --set-env-vars="AZURE_CLIENT_SECRET=projects/548822075986/secrets/AZURE_CLIENT_SECRET/versions/latest" \
   --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com"
 ```
 
