@@ -5,7 +5,7 @@ echo "Starting Cloud Run deployment..."
 gcloud run deploy simbyp-email-notifications \
   --source . \
   --region us-central1 \
-  --allow-unauthenticated \
+  --no-allow-unauthenticated \
   --memory=256Mi \
   --timeout=300 \
   --add-cloudsql-instances bosques-bogota-416214:us-central1:simbyp-users-db \
@@ -17,4 +17,5 @@ gcloud run deploy simbyp-email-notifications \
   --set-env-vars EXPECTED_CLOUD_SQL_INSTANCE=bosques-bogota-416214:us-central1:simbyp-users-db \
   --service-account="sa-bosques-app@bosques-bogota-416214.iam.gserviceaccount.com" \
   --project=bosques-bogota-416214
+
 echo "Deployment completed successfully!"
