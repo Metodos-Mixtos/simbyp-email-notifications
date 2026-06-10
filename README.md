@@ -48,6 +48,11 @@ main.py                            # Flask application and endpoints
 migrations/
 ├── 001_initial_schema.sql         # Users, subscriptions, audit tables
 └── 002_reports_tracking.sql       # Report tracking tables
+scripts/
+├── dev.sh                         # Start proxy + app together (recommended)
+├── dev-proxy.sh                   # Start Cloud SQL Proxy only
+├── run_test.sh                    # Install deps + run setup tests
+└── deploy.sh                      # Deploy to Cloud Run
 tests/
 ├── test_email_service.py          # Email service tests
 ├── test_utils.py                  # Utility function tests
@@ -82,24 +87,11 @@ pip install -r requirements.txt
 
 ### 2. Database Setup
 
-**PostgreSQL is required.** See [docs/CLOUD_SQL_SETUP.md](docs/CLOUD_SQL_SETUP.md) for detailed setup instructions.
+**Cloud SQL is required for all development.** The application uses a remote-only database setup to ensure consistency between local and production environments.
 
-Quick setup for local development:
+See [docs/CLOUD_SQL_SETUP.md](docs/CLOUD_SQL_SETUP.md) for detailed Cloud SQL setup instructions.
 
-```bash
-# Install PostgreSQL (example for macOS)
-brew install postgresql
-
-# Start PostgreSQL
-brew services start postgresql
-
-# Create database
-createdb simbyp
-
-# Run migrations
-psql simbyp < migrations/001_initial_schema.sql
-psql simbyp < migrations/002_reports_tracking.sql
-```
+**For local development**, you must use Cloud SQL Proxy to tunnel to the remote database. The proxy is automatically started by the dev scripts (see **Quick Start** below).
 
 ### 3. Google Cloud Setup
 
@@ -138,32 +130,18 @@ The system automatically detects where secrets come from and loads them accordin
 cp .env.example .env
 ```
 
-Edit `.env` - required for local development:
-
-```dotenv
-# REQUIRED: Azure AD Credentials (keep secure!)
-AZURE_CLIENT_ID=your-client-id
-AZURE_TENANT_ID=your-tenant-id
-AZURE_CLIENT_SECRET=your-client-secret
-
-# REQUIRED: Database connection
-DATABASE_URL=postgresql://simbyp_app:password@/simbyp_db?host=/cloudsql/bosques-bogota-416214:us-central1:simbyp-users-db
-REMOTE_DB_ONLY=true
-EXPECTED_CLOUD_SQL_INSTANCE=bosques-bogota-416214:us-central1:simbyp-users-db
-
-# OPTIONAL: Google service account for local dev only
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-
-# OPTIONAL: Override defaults if needed (most are defined in src/config.py)
-# GCP_PROJECT_ID=your-project
-# FROM_EMAIL=custom@example.com
-```
-
-For local development with a remote-only database, run Cloud SQL Auth Proxy using the Unix socket path that matches `DATABASE_URL`:
+For local development with a remote Cloud SQL database:
 
 ```bash
-cloud-sql-proxy --unix-socket /cloudsql \
-  bosques-bogota-416214:us-central1:simbyp-users-db
+cp .env.example .env
+# Edit .env with your Azure credentials and database password
+```
+
+**Database connection** in `.env`:
+```dotenv
+DATABASE_URL=postgresql://simbyp_app:PASSWORD@/simbyp_db?host=/tmp/cloudsql/bosques-bogota-416214:us-central1:simbyp-users-db
+REMOTE_DB_ONLY=true
+EXPECTED_CLOUD_SQL_INSTANCE=bosques-bogota-416214:us-central1:simbyp-users-db
 ```
 
 **Application defaults** (defined in `src/config.py`):
@@ -173,32 +151,74 @@ cloud-sql-proxy --unix-socket /cloudsql \
 - `DAYS_BACK`: 20
 - `PORT`: 8080
 
-### 5. Run Locally
+### 5. Quick Start (Local Development)
 
+**One-command startup** (proxy + app together):
+```bash
+./scripts/dev.sh
+```
+
+**Or two-terminal setup** (if you prefer separate processes):
+
+Terminal 1 — Start proxy:
+```bash
+./scripts/dev-proxy.sh
+```
+
+Terminal 2 — Run app:
 ```bash
 python main.py
 ```
 
-The app runs on `http://localhost:8080`
+Both approaches automatically create `/tmp/cloudsql` and tunnel to the remote Cloud SQL instance.
 
-## Admin User Management Interface
+### 6. Useful Scripts
+
+### 6. Useful Scripts
+
+All development and deployment scripts are in the `scripts/` folder:
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/dev.sh` | 🚀 Start proxy + app together (recommended for quick local dev) |
+| `scripts/dev-proxy.sh` | 🔌 Start Cloud SQL Proxy only (use in one terminal) |
+| `scripts/run_test.sh` | ✅ Install deps + run setup tests |
+| `scripts/deploy.sh` | 🚀 Deploy to Google Cloud Run |
+
+**Examples:**
+
+```bash
+# Quick local development (one command, one terminal)
+./scripts/dev.sh
+
+# Run tests and reinstall dependencies
+./scripts/run_test.sh
+
+# Deploy to production
+./scripts/deploy.sh
+```
+
+### 7. Admin User Management Interface
 
 The system includes a fully-functional browser-based admin interface for managing email recipients and subscriptions.
 
 ### Accessing the Admin Interface
 
-1. **Set up the database** (see setup instructions above)
+1. **Set up `.env`** with your Azure credentials and database password (see Quick Start above)
 
-2. **Run the database migrations** to create the required tables:
+2. **Database migrations** are pre-applied to Cloud SQL. If starting fresh:
    ```bash
-   # Migration 001: Core tables (users, subscriptions, audit)
-   psql -d your_database -f migrations/001_initial_schema.sql
-   
-   # Migration 002: Report tracking (optional)
-   psql -d your_database -f migrations/002_reports_tracking.sql
+   # Apply schema migrations
+   psql "postgresql://simbyp_app:PASSWORD@<PROXY_HOST>/simbyp_db" \
+     -f migrations/001_initial_schema.sql
    ```
 
-3. **Start the application** and navigate to:
+3. **Start the application**:
+   ```bash
+   ./scripts/dev.sh
+   ```
+
+4. **Access the admin interface**:
    ```
    http://localhost:8080/admin
    ```
