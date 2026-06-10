@@ -1,5 +1,6 @@
 import os
 import logging
+from urllib.parse import parse_qs, urlparse
 from dotenv import load_dotenv
 from google.cloud import secretmanager
 
@@ -105,6 +106,39 @@ def _load_secret_tiered(secret_name: str, default: str = "") -> str:
     logger.warning(f"✗ {secret_name} not found in any tier")
     return default
 
+
+def _is_local_database_url(database_url: str) -> bool:
+    """
+    Detect whether DATABASE_URL points to a local PostgreSQL endpoint (not proxied).
+
+    Considered local (must reject):
+    - localhost / 127.0.0.1 / ::1 on standard ports
+    
+    Considered remote/proxied (allowed):
+    - /cloudsql/* (Cloud Run)
+    - /tmp/cloudsql/* (Cloud SQL Proxy on macOS/Linux local dev)
+    - /var/run/postgresql/* (Cloud SQL Proxy on Linux)
+    """
+    local_hosts = {'localhost', '127.0.0.1', '::1'}
+    parsed = urlparse(database_url)
+
+    hostname = (parsed.hostname or '').strip().lower()
+    if hostname in local_hosts:
+        return True
+
+    query_host = parse_qs(parsed.query).get('host', [''])[0].strip().lower()
+    if not query_host:
+        return False
+
+    # Cloud SQL Proxy paths are considered remote (they tunnel to actual Cloud SQL)
+    if query_host.startswith('/cloudsql/') or query_host.startswith('/tmp/cloudsql') or query_host.startswith('/var/run/postgresql'):
+        return False
+
+    if query_host in local_hosts:
+        return True
+
+    return False
+
 # ============================================================================
 # APPLICATION DEFAULTS
 # These are the standard values used across environments.
@@ -125,6 +159,8 @@ PORT = int(os.getenv('PORT', 8080))
 # DATABASE CONFIGURATION (using 3-tier loading)
 # ============================================================================
 DATABASE_URL = _load_secret_tiered('DATABASE_URL')
+REMOTE_DB_ONLY = os.getenv('REMOTE_DB_ONLY', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+EXPECTED_CLOUD_SQL_INSTANCE = os.getenv('EXPECTED_CLOUD_SQL_INSTANCE', '').strip()
 
 if not DATABASE_URL:
     logger.error("✗ DATABASE_URL not found")
@@ -133,6 +169,15 @@ if not DATABASE_URL:
     logger.error("  See docs/CLOUD_SQL_SETUP.md for setup instructions.")
 else:
     logger.info("✓ Database configuration loaded successfully")
+    if REMOTE_DB_ONLY and _is_local_database_url(DATABASE_URL):
+        logger.error("✗ REMOTE_DB_ONLY is enabled, but DATABASE_URL resolves to a local endpoint.")
+        logger.error("  Use Cloud SQL connection format, e.g. host=/cloudsql/<project:region:instance>.")
+        raise RuntimeError("REMOTE_DB_ONLY=true requires DATABASE_URL to reference a remote database.")
+
+    if EXPECTED_CLOUD_SQL_INSTANCE and EXPECTED_CLOUD_SQL_INSTANCE not in DATABASE_URL:
+        logger.error("✗ DATABASE_URL does not match EXPECTED_CLOUD_SQL_INSTANCE.")
+        logger.error(f"  Expected to find: {EXPECTED_CLOUD_SQL_INSTANCE}")
+        raise RuntimeError("DATABASE_URL does not target the expected Cloud SQL instance.")
 
 # Database mode toggle (backward compatibility with routes expecting DB_ENABLED)
 # Priority: explicit DB_ENABLED env var, then infer from DATABASE_URL availability.
