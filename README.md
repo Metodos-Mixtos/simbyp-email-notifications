@@ -147,7 +147,9 @@ AZURE_TENANT_ID=your-tenant-id
 AZURE_CLIENT_SECRET=your-client-secret
 
 # REQUIRED: Database connection
-DATABASE_URL=postgresql://user:password@localhost:5432/simbyp
+DATABASE_URL=postgresql://simbyp_app:password@/simbyp_db?host=/cloudsql/bosques-bogota-416214:us-central1:simbyp-users-db
+REMOTE_DB_ONLY=true
+EXPECTED_CLOUD_SQL_INSTANCE=bosques-bogota-416214:us-central1:simbyp-users-db
 
 # OPTIONAL: Google service account for local dev only
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
@@ -155,6 +157,13 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 # OPTIONAL: Override defaults if needed (most are defined in src/config.py)
 # GCP_PROJECT_ID=your-project
 # FROM_EMAIL=custom@example.com
+```
+
+For local development with a remote-only database, run Cloud SQL Auth Proxy using the Unix socket path that matches `DATABASE_URL`:
+
+```bash
+cloud-sql-proxy --unix-socket /cloudsql \
+  bosques-bogota-416214:us-central1:simbyp-users-db
 ```
 
 **Application defaults** (defined in `src/config.py`):
@@ -811,4 +820,3 @@ The CSV loader is flexible and only requires the `Correo` column. Other columns 
 ## Contributing
 
 Daniel Wiesner y Laura Tamayo
-
