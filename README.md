@@ -218,10 +218,32 @@ The system includes a fully-functional browser-based admin interface for managin
    ./scripts/dev.sh
    ```
 
-4. **Access the admin interface**:
+4. **Access the admin interface (local development):**
    ```
    http://localhost:8080/admin
    ```
+
+
+### Accessing Admin on Cloud Run (Authenticated)
+
+Cloud Run is configured for authenticated invokers only. Direct access to the public URL returns `403 Forbidden` unless an identity token is provided.
+
+Use the local authenticated proxy:
+
+```bash
+gcloud auth login
+gcloud config set project bosques-bogota-416214
+gcloud run services proxy simbyp-email-notifications --region us-central1 --project bosques-bogota-416214
+```
+
+Then open:
+
+```
+http://127.0.0.1:8080/admin
+```
+
+Only users with `roles/run.invoker` on this service (currently `lstamayo@metodosmixtos.com` and `dwiesner@metodosmixtos.com`) can access the admin panel via this method.
+
 
 ### Features
 
