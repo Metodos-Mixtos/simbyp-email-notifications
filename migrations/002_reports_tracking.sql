@@ -15,7 +15,7 @@ CREATE TABLE reports_sent (
     report_date DATE,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     recipient_count INTEGER DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'failed', 'partial')),
+    status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('generated', 'sent', 'failed', 'partial')),
     error_message TEXT,
     metadata JSONB
 );

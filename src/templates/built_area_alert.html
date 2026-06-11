@@ -389,21 +389,53 @@
         <div class="alert-section">
             <h2>Detalles del Reporte</h2>
             <div class="alert-card">
-                <h3>{{ alert.title }}</h3>
+                <h3>{{ report.title }}</h3>
                 <div class="alert-meta">
-                    📅 Fecha del reporte: {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}<br>
+                    {% if report.report_date %}
+                    📅 Fecha del reporte: {{ report.report_date }}<br>
+                    {% endif %}
+                    📅 Actualizado: {{ report.updated.strftime('%d/%m/%Y %H:%M') }}<br>
                 </div>
-                <a href="{{ alert.url }}" class="btn">Ver Reporte Completo</a>
+                {% if report.url %}
+                <a href="{{ report.url }}" class="btn">Ver Reporte Completo</a>
+                {% endif %}
+
+                {% if report.files %}
+                <div style="margin-top: 16px;">
+                    <strong>Archivos disponibles:</strong>
+                    <ul style="margin-top: 8px; padding-left: 20px;">
+                        {% for file in report.files %}
+                        <li><a href="{{ file.url }}">{{ file.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
             </div>
         </div>
 
-        {% elif alert %}
+        {% elif report %}
         <div class="summary">
             <h2 style="margin-top: 0;">Reporte Disponible</h2>
             <p>Se ha procesado el siguiente reporte de expansión de área construida:</p>
             <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
-                <p><strong>Fecha del reporte:</strong> {{ alert.updated.strftime('%d/%m/%Y %H:%M') }}</p>
-                <a href="{{ alert.url }}" class="btn">Ver Reporte Completo</a>
+                {% if report.report_date %}
+                <p><strong>Fecha del reporte:</strong> {{ report.report_date }}</p>
+                {% endif %}
+                <p><strong>Actualizado:</strong> {{ report.updated.strftime('%d/%m/%Y %H:%M') }}</p>
+                {% if report.url %}
+                <a href="{{ report.url }}" class="btn">Ver Reporte Completo</a>
+                {% endif %}
+
+                {% if report.files %}
+                <div style="margin-top: 16px;">
+                    <strong>Archivos disponibles:</strong>
+                    <ul style="margin-top: 8px; padding-left: 20px;">
+                        {% for file in report.files %}
+                        <li><a href="{{ file.url }}">{{ file.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
             </div>
         </div>
 

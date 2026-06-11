@@ -49,7 +49,7 @@ class ReportSent(Base):
             name='check_report_alert_type'
         ),
         CheckConstraint(
-            "status IN ('sent', 'failed', 'partial')",
+            "status IN ('generated', 'sent', 'failed', 'partial')",
             name='check_report_status'
         ),
     )

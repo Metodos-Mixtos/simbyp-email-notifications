@@ -205,6 +205,64 @@ class ReportRepository:
             .order_by(desc(ReportSent.sent_at))
         )
         return list(self.session.execute(stmt).scalars().all())
+
+    def get_next_generated_report(self, alert_type: str) -> Optional[ReportSent]:
+        """
+        Get the next pending report to send for an alert type.
+
+        Selection policy:
+        - status must be 'generated'
+        - newest report_date first (NULLS LAST)
+        - then newest sent_at timestamp
+
+        Args:
+            alert_type: Alert type to filter by
+
+        Returns:
+            ReportSent object or None
+        """
+        stmt = (
+            select(ReportSent)
+            .where(and_(
+                ReportSent.alert_type == alert_type,
+                ReportSent.status == 'generated'
+            ))
+            .order_by(
+                desc(ReportSent.report_date).nullslast(),
+                desc(ReportSent.sent_at)
+            )
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def update_report_status(self, report_id: UUID, status: str,
+                             recipient_count: int = 0,
+                             error_message: str = None) -> bool:
+        """
+        Update overall send status for a report.
+
+        Args:
+            report_id: Report UUID
+            status: New status ('sent', 'failed', 'partial')
+            recipient_count: Number of recipients for successful/partial sends
+            error_message: Error details for failures
+
+        Returns:
+            True if updated, False if report not found
+        """
+        report = self.session.execute(
+            select(ReportSent).where(ReportSent.id == report_id)
+        ).scalar_one_or_none()
+
+        if not report:
+            return False
+
+        report.status = status
+        report.recipient_count = recipient_count
+        report.error_message = error_message
+        self.session.flush()
+        logger.info(f"Updated report status: {report_id} -> {status}")
+        return True
     
     def get_delivery_rate(self, report_id: UUID) -> float:
         """

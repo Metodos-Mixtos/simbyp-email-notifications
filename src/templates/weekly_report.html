@@ -110,7 +110,15 @@
 <body>
   <div class="wrap">
     <h1>Reporte Semanal de Alertas SIMBYP</h1>
-    <div class="subtitle">Período: {{ report.start_date }} a {{ report.end_date }}</div>
+    <div class="subtitle">
+      {% if report.start_date and report.end_date %}
+      Período: {{ report.start_date }} a {{ report.end_date }}
+      {% elif report.report_date %}
+      Fecha del reporte: {{ report.report_date }}
+      {% else %}
+      Reporte disponible para consulta
+      {% endif %}
+    </div>
 
     <h2>Alertas de la Semana</h2>
     
@@ -120,9 +128,15 @@
       <p><strong>Se ha generado un nuevo reporte con el análisis semanal de alertas de deforestación y cambios de cobertura.</strong></p>
       
       <div class="meta-info">
+        {% if report.start_date and report.end_date %}
         <div class="meta-info-item">
           <span class="meta-label">📅 Período:</span> {{ report.start_date }} a {{ report.end_date }}
         </div>
+        {% elif report.report_date %}
+        <div class="meta-info-item">
+          <span class="meta-label">📅 Fecha del reporte:</span> {{ report.report_date }}
+        </div>
+        {% endif %}
         <div class="meta-info-item">
           <span class="meta-label">🔄 Actualizado:</span> {{ report.updated.strftime('%d de %B de %Y a las %H:%M') }}
         </div>
@@ -131,8 +145,19 @@
         </div>
       </div>
 
+      {% if report.url %}
       <p>Accede al reporte completo con visualizaciones interactivas:</p>
       <a href="{{ report.url }}" class="btn">Ver Reporte Completo</a>
+      {% endif %}
+
+      {% if report.files %}
+      <h3>Archivos del Reporte</h3>
+      <ul>
+        {% for file in report.files %}
+        <li><a href="{{ file.url }}">{{ file.name }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </div>
 
     <div class="footer">

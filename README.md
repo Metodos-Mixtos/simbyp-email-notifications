@@ -47,10 +47,12 @@ src/
 main.py                            # Flask application and endpoints
 migrations/
 ├── 001_initial_schema.sql         # Users, subscriptions, audit tables
-└── 002_reports_tracking.sql       # Report tracking tables
+├── 002_reports_tracking.sql       # Report tracking tables
+└── 003_reports_sent_generated_status.sql  # Ensure generated status is allowed
 scripts/
 ├── dev.sh                         # Start proxy + app together (recommended)
 ├── dev-proxy.sh                   # Start Cloud SQL Proxy only
+├── seed_generated_reports.sql      # Seed generated reports for queue validation
 ├── run_test.sh                    # Install deps + run setup tests
 └── deploy.sh                      # Deploy to Cloud Run
 tests/
@@ -182,6 +184,7 @@ All development and deployment scripts are in the `scripts/` folder:
 |--------|---------|
 | `scripts/dev.sh` | 🚀 Start proxy + app together (recommended for quick local dev) |
 | `scripts/dev-proxy.sh` | 🔌 Start Cloud SQL Proxy only (use in one terminal) |
+| `scripts/seed_generated_reports.sql` | 🧪 Seed generated report rows for DB-first queue tests |
 | `scripts/run_test.sh` | ✅ Install deps + run setup tests |
 | `scripts/deploy.sh` | 🚀 Deploy to Google Cloud Run |
 
@@ -201,6 +204,28 @@ All development and deployment scripts are in the `scripts/` folder:
 ### 7. Admin User Management Interface
 
 The system includes a fully-functional browser-based admin interface for managing email recipients and subscriptions.
+
+### Report Queue Preview (DB-First)
+
+Apply migration 003 if your environment already had migration 002 applied before this change:
+
+```bash
+psql "$DATABASE_URL" -f migrations/003_reports_sent_generated_status.sql
+```
+
+Seed one weekly and one monthly generated report for end-to-end testing:
+
+```bash
+psql "$DATABASE_URL" -f scripts/seed_generated_reports.sql
+```
+
+Preview the next generated candidate(s) that will be selected for sending:
+
+```bash
+curl "http://localhost:8080/api/report-queue/next"
+curl "http://localhost:8080/api/report-queue/next?alert_type=weekly_alerts"
+curl "http://localhost:8080/api/report-queue/next?alert_type=monthly_built_area"
+```
 
 ### Accessing the Admin Interface
 
