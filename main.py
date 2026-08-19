@@ -322,132 +322,7 @@ def test_alerts():
 @app.route('/admin')
 def admin_interface():
     """Admin interface for user management"""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>User Management - SIMBYP Email Notifications</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            .loading { display: none; }
-            .loading.show { display: inline-block; }
-            .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
-            .subscription-badge { margin: 2px; }
-        </style>
-    </head>
-    <body>
-        <nav class="navbar navbar-dark bg-primary">
-            <div class="container-fluid">
-                <span class="navbar-brand mb-0 h1">SIMBYP User Management</span>
-            </div>
-        </nav>
-        
-        <div class="container mt-4">
-            <div class="row mb-3">
-                <div class="col">
-                    <h2>Email Recipients</h2>
-                </div>
-                <div class="col text-end">
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetUserForm()">
-                        <i class="bi bi-plus-circle"></i> Add User
-                    </button>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-body">
-                    <div class="mb-3">
-                        <input type="text" id="searchInput" class="form-control" placeholder="Search by email or name...">
-                    </div>
-                    
-                    <div id="loadingSpinner" class="text-center py-4">
-                        <div class="spinner-border" role="status"></div>
-                    </div>
-                    
-                    <div id="userTableContainer" style="display: none;">
-                        <table class="table table-striped table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Email</th>
-                                    <th>Name</th>
-                                    <th>Department</th>
-                                    <th>Municipality</th>
-                                    <th>Subscriptions</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="userTableBody"></tbody>
-                        </table>
-                    </div>
-                    
-                    <div id="emptyState" class="text-center py-4" style="display: none;">
-                        <p class="text-muted">No users found. Click "Add User" to create one.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- User Modal -->
-        <div class="modal fade" id="userModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalTitle">Add User</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="userForm">
-                            <input type="hidden" id="userId">
-                            <div class="mb-3">
-                                <label for="userEmail" class="form-label">Email *</label>
-                                <input type="email" class="form-control" id="userEmail" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="userName" class="form-label">Name</label>
-                                <input type="text" class="form-control" id="userName">
-                            </div>
-                            <div class="mb-3">
-                                <label for="userDepartment" class="form-label">Department</label>
-                                <input type="text" class="form-control" id="userDepartment">
-                            </div>
-                            <div class="mb-3">
-                                <label for="userMunicipality" class="form-label">Municipality Code</label>
-                                <input type="text" class="form-control" id="userMunicipality" placeholder="e.g., 11001">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Subscriptions</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="subWeekly" value="weekly_alerts">
-                                    <label class="form-check-label" for="subWeekly">Weekly Alerts (Deforestation + Land Cover)</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="subMonthly" value="monthly_built_area">
-                                    <label class="form-check-label" for="subMonthly">Monthly Built Area</label>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="saveUserButton" onclick="saveUser(event)">
-                            <span class="spinner-border spinner-border-sm loading" role="status"></span>
-                            Save
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Toast Container -->
-        <div class="toast-container"></div>
-        
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="/static/js/admin.js"></script>
-    </body>
-    </html>
-    """
+    return render_template('admin.html')
 
 @app.route('/api/users', methods=['GET'])
 def list_users():
@@ -667,6 +542,81 @@ def delete_user(user_id):
         return jsonify({'success': False, 'error': 'Invalid user ID format'}), 400
     except Exception as e:
         logger.error(f"Error deleting user: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/batch-import-template', methods=['GET'])
+def get_batch_import_template():
+    """Download CSV template for batch user import"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        from src.database import get_db_session
+        from src.services.batch_import_service import BatchImportService
+        
+        with get_db_session() as session:
+            import_service = BatchImportService(session)
+            csv_content = import_service.generate_template_csv()
+        
+        # Return CSV file for download
+        return csv_content, 200, {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': 'attachment; filename=plantilla_correos_template.csv'
+        }
+    
+    except Exception as e:
+        logger.error(f"Error generating template: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/batch-import', methods=['POST'])
+def batch_import_users():
+    """Batch import users and subscriptions from CSV file"""
+    from src.config import DB_ENABLED
+    
+    if not DB_ENABLED:
+        return jsonify({'success': False, 'error': 'Database not enabled'}), 503
+    
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+        
+        csv_file = request.files['file']
+        
+        if csv_file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        
+        # Validate file type
+        if not csv_file.filename.endswith('.csv'):
+            return jsonify({'success': False, 'error': 'File must be a CSV file'}), 400
+        
+        # Check file size (max 10MB)
+        csv_file.seek(0, 2)  # Seek to end
+        file_size = csv_file.tell()
+        csv_file.seek(0)  # Reset to beginning
+        
+        max_size = 10 * 1024 * 1024  # 10MB
+        if file_size > max_size:
+            return jsonify({'success': False, 'error': 'File too large (max 10MB)'}), 413
+        
+        # Get performed_by from session (user ID or 'admin')
+        performed_by = session.get('user_id', 'admin')
+        
+        from src.database import get_db_session
+        from src.services.batch_import_service import BatchImportService
+        
+        with get_db_session() as db_session:
+            import_service = BatchImportService(db_session)
+            result = import_service.import_users_batch(csv_file, performed_by)
+        
+        return jsonify(result.to_dict()), 200
+    
+    except Exception as e:
+        logger.error(f"Error in batch import: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

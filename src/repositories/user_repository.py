@@ -2,7 +2,7 @@
 User repository for CRUD operations on users.
 """
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -226,3 +226,44 @@ class UserRepository:
         """
         stmt = select(func.count()).select_from(User).where(User.email == email.lower().strip())
         return self.session.execute(stmt).scalar() > 0
+    
+    def upsert(self, email: str, name: str = None, department: str = None, 
+               municipality_code: str = None) -> Tuple[User, bool]:
+        """
+        Create or update a user by email (upsert).
+        
+        Args:
+            email: User email (used as unique key)
+            name: User full name
+            department: User department/organization
+            municipality_code: Colombian municipality DIVIPOLA code
+        
+        Returns:
+            Tuple of (User object, is_new) where is_new is True if user was created
+        
+        Raises:
+            ValueError: On database error
+        """
+        normalized_email = email.lower().strip()
+        existing_user = self.get_by_email(normalized_email)
+        
+        if existing_user:
+            # Update existing user
+            try:
+                if name:
+                    existing_user.name = name.strip()
+                if department:
+                    existing_user.department = department.strip()
+                if municipality_code:
+                    existing_user.municipality_code = municipality_code.strip()
+                
+                self.session.flush()
+                logger.info(f"Upserted (updated) user: {existing_user.email} (id={existing_user.id})")
+                return existing_user, False
+            except IntegrityError as e:
+                self.session.rollback()
+                logger.error(f"Failed to upsert user {email}: {e}")
+                raise ValueError(f"Cannot update user {email}: {str(e)}") from e
+        else:
+            # Create new user
+            return self.create(email, name, department, municipality_code), True
