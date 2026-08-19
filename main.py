@@ -603,8 +603,8 @@ def batch_import_users():
         if file_size > max_size:
             return jsonify({'success': False, 'error': 'File too large (max 10MB)'}), 413
         
-        # Get performed_by from session (user ID or 'admin')
-        performed_by = session.get('user_id', 'admin')
+        # Performed by is always 'admin' for now (no user session management)
+        performed_by = 'admin'
         
         from src.database import get_db_session
         from src.services.batch_import_service import BatchImportService
