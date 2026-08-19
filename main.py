@@ -19,7 +19,7 @@ from src.alerts_processor import AlertProcessor
 from src.email_service import EmailService
 from src import utils
 
-app = Flask(__name__, static_folder='src/static', static_url_path='/static')
+app = Flask(__name__, static_folder='src/static', static_url_path='/static', template_folder='src/templates')
 app.config['JSON_SORT_KEYS'] = False
 
 
