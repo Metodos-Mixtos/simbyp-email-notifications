@@ -7,6 +7,7 @@ A Flask-based email notification system that sends scheduled environmental alert
 - **Frequency-Based Alerts**:
   - Weekly email (every Tuesday): Deforestation (GFW) + Land Cover (PSA) alerts
   - Monthly email (first Friday): Built area expansion alerts
+  - Dynamic World Paramos Reports: Monthly monitoring of paramos ecosystem (on-demand or scheduled)
 - **Cloud Storage Integration**: Reads alert reports from Google Cloud Storage
 - **Database-Driven Recipient Management**: PostgreSQL for dynamic user management with subscriptions
 - **Admin User Management**: Browser-based interface for managing email recipients and subscriptions
@@ -15,6 +16,7 @@ A Flask-based email notification system that sends scheduled environmental alert
 - **Cloud-Ready**: Containerized with Docker, deployable on Cloud Run
 - **Microsoft 365 Native**: Uses Microsoft Graph API for native Office 365 integration
 - **Comprehensive Audit Logging**: Tracks all user and subscription changes
+- **Batch Import**: CSV-based bulk user and subscription management with error reporting
 
 ## Project Structure
 
@@ -37,18 +39,23 @@ src/
 │   ├── user_repository.py         # User CRUD operations
 │   ├── subscription_repository.py # Subscription management
 │   └── report_repository.py       # Report operations
+├── services/                      # Business logic services
+│   ├── batch_import_service.py    # Bulk user/subscription CSV import
+│   └── paramos_monitor_service.py # Dynamic World paramos report monitoring
 ├── static/
 │   └── js/
 │       └── admin.js               # Admin UI JavaScript
 └── templates/                     # HTML email templates
     ├── built_area_alert.html      # Monthly built area report
+    ├── paramos_report.html        # Dynamic World paramos report
     ├── weekly_alerts.html         # Weekly deforestation + land cover alerts
     └── weekly_report.html         # Weekly report template
 main.py                            # Flask application and endpoints
 migrations/
 ├── 001_initial_schema.sql         # Users, subscriptions, audit tables
 ├── 002_reports_tracking.sql       # Report tracking tables
-└── 003_reports_sent_generated_status.sql  # Ensure generated status is allowed
+├── 003_reports_sent_generated_status.sql  # Ensure generated status is allowed
+└── 004_add_paramos_subscription.sql       # Add reporte_paramos alert type
 scripts/
 ├── dev.sh                         # Start proxy + app together (recommended)
 ├── dev-proxy.sh                   # Start Cloud SQL Proxy only
@@ -476,6 +483,71 @@ Returns a preview of what alerts would be sent (for debugging/monitoring).
 }
 ```
 
+### Dynamic World Paramos Reports
+
+```bash
+POST /api/reports/paramos/sync?year=2026&month=8
+```
+
+Triggers synchronization of a paramos report from Dynamic World service. Detects new reports in GCS, extracts metadata, identifies subscribers, and logs report delivery tracking.
+
+**Parameters:**
+- `year` (optional): Year of report (defaults to current year)
+- `month` (optional): Month of report 1-12 (defaults to current month)
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "data": {
+    "report_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Reporte de Páramos - Agosto 2026",
+    "url": "https://storage.googleapis.com/reportes-simbyp/dynamic_world/2026_8/...",
+    "recipients": 42
+  }
+}
+```
+
+**Response (no new report):**
+```json
+{
+  "success": false,
+  "error": "No new paramos report found for 2026-08"
+}
+```
+
+**Cloud Scheduler Setup** (optional, for monthly automation):
+```bash
+gcloud scheduler jobs create http paramos-sync \
+  --location us-central1 \
+  --schedule "0 0 L * *" \
+  --uri "https://your-cloud-run-url/api/reports/paramos/sync" \
+  --http-method POST
+```
+
+#### Get Latest Paramos Report
+
+```bash
+GET /api/reports/paramos/latest
+```
+
+Retrieves metadata for the most recently logged paramos report.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Reporte de Páramos - Agosto 2026",
+    "url": "https://storage.googleapis.com/reportes-simbyp/dynamic_world/2026_8/...",
+    "sent_at": "2026-08-19T12:30:00",
+    "recipient_count": 42,
+    "status": "generated"
+  }
+}
+```
+
 ### Admin User Management API
 
 When database mode is enabled (`DB_ENABLED=true`), the following API endpoints are available:
@@ -561,6 +633,74 @@ DELETE /api/users/{user_id}
 ```
 
 Deletes user and all associated subscriptions and audit logs.
+
+#### Batch Import Users
+
+**Download Template**
+```bash
+GET /api/batch-import-template
+```
+
+Downloads a CSV template with required headers and example rows.
+
+**Response:** CSV file download
+```csv
+Correo,Nombre,Departamento,Municipio,reporte_gfw,monthly_built_area,reporte_paramos
+usuario@example.com,Juan Pérez,Cundinamarca,11001,1,1,0
+```
+
+**Import Users**
+```bash
+POST /api/batch-import
+Content-Type: multipart/form-data
+
+file: <CSV file (max 10MB)>
+```
+
+Bulk imports users and manages subscriptions from CSV file. Processes valid rows, reports errors for invalid ones, and returns detailed import results.
+
+**CSV Columns:**
+- `Correo` (required): Email address
+- `Nombre` (required): Full name
+- `Departamento` (optional): Department
+- `Municipio` (optional): Municipality code
+- `reporte_gfw` (optional): Subscribe to weekly alerts (0 or 1)
+- `monthly_built_area` (optional): Subscribe to monthly built area (0 or 1)
+- `reporte_paramos` (optional): Subscribe to paramos reports (0 or 1)
+
+**Response (success):**
+```json
+{
+  "status": "success",
+  "summary": {
+    "total": 10,
+    "created": 8,
+    "updated": 1,
+    "skipped": 1,
+    "errors": []
+  }
+}
+```
+
+**Response (partial success):**
+```json
+{
+  "status": "partial",
+  "summary": {
+    "total": 10,
+    "created": 8,
+    "updated": 0,
+    "skipped": 1,
+    "errors": [
+      {
+        "row": 5,
+        "email": "invalid@",
+        "errors": ["Invalid email format"]
+      }
+    ]
+  }
+}
+```
 
 ## Deployment
 
