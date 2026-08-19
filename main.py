@@ -7,7 +7,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Now import config and other modules
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from src.config import (
     GCP_PROJECT_ID, PORT, 
     AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET, 
