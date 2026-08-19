@@ -394,30 +394,30 @@ async function handleBatchImport(event) {
         
         const result = await response.json();
         
-        if (!result.success) {
-            showToast('Batch import failed: ' + result.error, 'danger');
+        // Backend returns { status: "...", summary: {...}, errors: [...] }
+        // Not { success: true/false }
+        if (!response.ok || !result.summary) {
+            showToast('Batch import failed: ' + (result.error || 'Unknown error'), 'danger');
             return;
         }
         
         // Display summary
         const summary = result.summary;
-        if (summary) {
-            let message = `Import completed: ${summary.created} created, ${summary.updated} updated`;
-            if (summary.skipped > 0) {
-                message += `, ${summary.skipped} skipped`;
-            }
-            if (summary.errors > 0) {
-                message += `, ${summary.errors} errors`;
-                // Show error details if any
-                if (result.errors && result.errors.length > 0) {
-                    const errorDetails = result.errors.map(e => `Row ${e.row}: ${e.email} - ${e.errors.join(', ')}`).join('\n');
-                    setTimeout(() => {
-                        alert('Errors encountered:\n' + errorDetails);
-                    }, 500);
-                }
-            }
-            showToast(message, summary.errors === 0 ? 'success' : 'warning');
+        let message = `Import completed: ${summary.created} created, ${summary.updated} updated`;
+        if (summary.skipped > 0) {
+            message += `, ${summary.skipped} skipped`;
         }
+        if (summary.errors > 0) {
+            message += `, ${summary.errors} errors`;
+            // Show error details if any
+            if (result.errors && result.errors.length > 0) {
+                const errorDetails = result.errors.map(e => `Row ${e.row}: ${e.email} - ${e.errors.join(', ')}`).join('\n');
+                setTimeout(() => {
+                    alert('Errors encountered:\n' + errorDetails);
+                }, 500);
+            }
+        }
+        showToast(message, summary.errors === 0 ? 'success' : 'warning');
         
         // Reset form
         fileInput.value = '';
