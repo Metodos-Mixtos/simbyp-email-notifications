@@ -303,3 +303,132 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Download batch import CSV template
+async function downloadTemplate() {
+    const templateButton = document.getElementById('downloadTemplateButton');
+    const templateSpinner = document.getElementById('templateSpinner');
+    
+    templateSpinner.classList.add('show');
+    templateButton.disabled = true;
+    
+    try {
+        const response = await fetch('/api/batch-import-template');
+        
+        if (!response.ok) {
+            const result = await response.json();
+            showToast('Error downloading template: ' + result.error, 'danger');
+            return;
+        }
+        
+        // Extract filename from Content-Disposition header or use default
+        const contentDisposition = response.headers.get('content-disposition');
+        let filename = 'batch_import_template.csv';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+            if (filenameMatch && filenameMatch[1]) {
+                filename = filenameMatch[1];
+            }
+        }
+        
+        // Download the file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        
+        showToast('Template downloaded successfully', 'success');
+        
+    } catch (error) {
+        showToast('Failed to download template: ' + error.message, 'danger');
+    } finally {
+        templateSpinner.classList.remove('show');
+        templateButton.disabled = false;
+    }
+}
+
+// Handle batch import
+async function handleBatchImport(event) {
+    event.preventDefault();
+    
+    const fileInput = document.getElementById('csvFileInput');
+    const importButton = document.getElementById('batchImportButton');
+    const importSpinner = document.getElementById('importSpinner');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        showToast('Please select a CSV file', 'warning');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    // Validate file type
+    if (!file.name.endsWith('.csv')) {
+        showToast('File must be a CSV file', 'danger');
+        return;
+    }
+    
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        showToast('File is too large (max 10MB)', 'danger');
+        return;
+    }
+    
+    importSpinner.classList.add('show');
+    importButton.disabled = true;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/batch-import', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            showToast('Batch import failed: ' + result.error, 'danger');
+            return;
+        }
+        
+        // Display summary
+        const summary = result.summary;
+        if (summary) {
+            let message = `Import completed: ${summary.created} created, ${summary.updated} updated`;
+            if (summary.skipped > 0) {
+                message += `, ${summary.skipped} skipped`;
+            }
+            if (summary.errors > 0) {
+                message += `, ${summary.errors} errors`;
+                // Show error details if any
+                if (result.errors && result.errors.length > 0) {
+                    const errorDetails = result.errors.map(e => `Row ${e.row}: ${e.email} - ${e.errors.join(', ')}`).join('\n');
+                    setTimeout(() => {
+                        alert('Errors encountered:\n' + errorDetails);
+                    }, 500);
+                }
+            }
+            showToast(message, summary.errors === 0 ? 'success' : 'warning');
+        }
+        
+        // Reset form
+        fileInput.value = '';
+        
+        // Reload users table
+        await loadUsers();
+        
+    } catch (error) {
+        showToast('Error during batch import: ' + error.message, 'danger');
+    } finally {
+        importSpinner.classList.remove('show');
+        importButton.disabled = false;
+    }
+}
