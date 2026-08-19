@@ -76,7 +76,7 @@ class BatchImportService:
     SUBSCRIPTION_MAPPING = {
         'reporte_gfw': 'weekly_alerts',
         'monthly_built_area': 'monthly_built_area',
-        'reporte_paramos': None,  # Deferred - handled by separate service
+        'reporte_paramos': 'reporte_paramos',  # Dynamic World paramos reports
     }
     
     def __init__(self, session: Session):

@@ -58,8 +58,18 @@ function renderUsers(users) {
         const tr = document.createElement('tr');
         
         const subscriptionBadges = user.subscriptions.map(sub => {
-            const label = sub === 'weekly_alerts' ? 'Weekly Alerts' : 'Monthly Built Area';
-            const color = sub === 'weekly_alerts' ? 'primary' : 'success';
+            const labels = {
+                'weekly_alerts': 'Weekly Alerts',
+                'monthly_built_area': 'Monthly Built Area',
+                'reporte_paramos': 'Paramos Report'
+            };
+            const colors = {
+                'weekly_alerts': 'primary',
+                'monthly_built_area': 'success',
+                'reporte_paramos': 'info'
+            };
+            const label = labels[sub] || sub;
+            const color = colors[sub] || 'secondary';
             return `<span class="badge bg-${color} subscription-badge">${label}</span>`;
         }).join('');
         
@@ -132,6 +142,7 @@ async function editUser(userId) {
         document.getElementById('userMunicipality').value = user.municipality_code || '';
         document.getElementById('subWeekly').checked = user.subscriptions.includes('weekly_alerts');
         document.getElementById('subMonthly').checked = user.subscriptions.includes('monthly_built_area');
+        document.getElementById('subParamos').checked = user.subscriptions.includes('reporte_paramos');
         
         const modal = new bootstrap.Modal(document.getElementById('userModal'));
         modal.show();
@@ -164,6 +175,9 @@ async function saveUser(event) {
     }
     if (document.getElementById('subMonthly').checked) {
         subscriptions.push('monthly_built_area');
+    }
+    if (document.getElementById('subParamos').checked) {
+        subscriptions.push('reporte_paramos');
     }
     
     const userData = {

@@ -171,6 +171,28 @@ class SubscriptionRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
     
+    def get_active_by_alert_type(self, alert_type: str) -> List[Subscription]:
+        """
+        Get all active subscriptions for a specific alert type.
+        
+        Args:
+            alert_type: Alert type to filter
+        
+        Returns:
+            List of active Subscription objects with user data
+        """
+        from sqlalchemy.orm import joinedload
+        stmt = (
+            select(Subscription)
+            .options(joinedload(Subscription.user))
+            .where(and_(
+                Subscription.alert_type == alert_type,
+                Subscription.is_active == True
+            ))
+            .order_by(Subscription.user_id)
+        )
+        return list(self.session.execute(stmt).scalars().unique().all())
+    
     def get_recipients_by_alert_type(self, alert_type: str) -> List[str]:
         """
         Get list of recipient emails for an alert type.

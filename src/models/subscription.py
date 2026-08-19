@@ -18,7 +18,7 @@ class Subscription(Base):
     Attributes:
         id: Unique identifier (UUID)
         user_id: Foreign key to User
-        alert_type: Type of alert ('weekly_alerts' or 'monthly_built_area')
+        alert_type: Type of alert ('weekly_alerts', 'monthly_built_area', or 'reporte_paramos')
         is_active: Whether subscription is currently active
         subscribed_at: Timestamp when user subscribed
         unsubscribed_at: Timestamp when user unsubscribed (if applicable)
@@ -36,7 +36,7 @@ class Subscription(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "alert_type IN ('weekly_alerts', 'monthly_built_area')",
+            "alert_type IN ('weekly_alerts', 'monthly_built_area', 'reporte_paramos')",
             name='check_alert_type'
         ),
         UniqueConstraint('user_id', 'alert_type', name='unique_user_alert_type'),
@@ -73,4 +73,4 @@ class Subscription(Base):
     @classmethod
     def get_valid_alert_types(cls) -> list[str]:
         """Get list of valid alert types."""
-        return ['weekly_alerts', 'monthly_built_area']
+        return ['weekly_alerts', 'monthly_built_area', 'reporte_paramos']

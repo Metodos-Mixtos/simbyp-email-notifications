@@ -206,6 +206,24 @@ class ReportRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def get_latest_by_alert_type(self, alert_type: str) -> Optional[ReportSent]:
+        """
+        Get the most recent report for an alert type.
+        
+        Args:
+            alert_type: Alert type to filter
+        
+        Returns:
+            ReportSent object or None
+        """
+        stmt = (
+            select(ReportSent)
+            .where(ReportSent.alert_type == alert_type)
+            .order_by(desc(ReportSent.sent_at))
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def get_next_generated_report(self, alert_type: str) -> Optional[ReportSent]:
         """
         Get the next pending report to send for an alert type.

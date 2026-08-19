@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e7e34 0%, #2fa03f 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 8px 0 0 0;
+            font-size: 14px;
+            opacity: 0.95;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e7e34;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #1e7e34;
+            padding-bottom: 8px;
+        }
+        .alert-summary {
+            background-color: #f0f8f4;
+            border-left: 4px solid #1e7e34;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .alert-summary strong {
+            color: #1e7e34;
+        }
+        .metadata-item {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .metadata-label {
+            font-weight: 600;
+            color: #666;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #1e7e34;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            margin: 20px 0;
+            transition: background-color 0.3s;
+        }
+        .cta-button:hover {
+            background-color: #156b2a;
+        }
+        .footer {
+            background-color: #f9f9f9;
+            border-top: 1px solid #eee;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        .footer a {
+            color: #1e7e34;
+            text-decoration: none;
+        }
+        .paramo-list {
+            margin: 15px 0;
+            padding-left: 20px;
+        }
+        .paramo-list li {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .bullet-point {
+            margin: 8px 0 8px 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>{{ title }}</h1>
+            <p>Reporte de Monitoreo de Páramos desde Dynamic World</p>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <!-- Welcome -->
+            <p style="font-size: 15px; line-height: 1.6;">
+                Estimado/a {{ recipient_name }},
+            </p>
+            <p style="font-size: 15px; line-height: 1.6;">
+                Nos complace compartir el reporte mensual de cobertura en páramos, generado a partir de datos de satélite del servicio Dynamic World.
+            </p>
+            
+            <!-- Summary Section -->
+            <div class="section">
+                <div class="section-title">Resumen del Reporte</div>
+                <div class="alert-summary">
+                    <p style="margin: 0;">
+                        <strong>Análisis de Cambios de Cobertura</strong>
+                    </p>
+                    <p style="margin: 8px 0 0 0; font-size: 14px;">
+                        Este reporte incluye un análisis detallado de los cambios detectados en la cobertura de los páramos, 
+                        identificando transiciones de uso del suelo y cambios significativos entre períodos.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Report Details Section -->
+            {% if metadata %}
+            <div class="section">
+                <div class="section-title">Detalles del Reporte</div>
+                {% if metadata.get('paramos') %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Páramos Procesados:</span>
+                </div>
+                <ul class="paramo-list">
+                    {% for paramo in metadata.get('paramos', []) %}
+                    <li>{{ paramo }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                
+                {% if metadata.get('summary') %}
+                <div class="metadata-item" style="margin-top: 15px;">
+                    <span class="metadata-label">Resumen Ejecutivo:</span>
+                </div>
+                <div class="bullet-point">
+                    {{ metadata.get('summary') }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            <!-- What's Included -->
+            <div class="section">
+                <div class="section-title">¿Qué Incluye Este Reporte?</div>
+                <div class="bullet-point">
+                    ✓ <strong>Análisis de Transiciones:</strong> Cambios en cobertura entre diferentes tipos de uso del suelo
+                </div>
+                <div class="bullet-point">
+                    ✓ <strong>Mapas Interactivos:</strong> Visualización geográfica de los cambios detectados
+                </div>
+                <div class="bullet-point">
+                    ✓ <strong>Datos en CSV:</strong> Información detallada para análisis avanzados
+                </div>
+                <div class="bullet-point">
+                    ✓ <strong>Imágenes de Satélite:</strong> Comparativas visuales de los páramos
+                </div>
+            </div>
+            
+            <!-- CTA -->
+            <div style="text-align: center;">
+                <a href="{{ report_url }}" class="cta-button">Ver Reporte Completo</a>
+            </div>
+            
+            <!-- Additional Info -->
+            <p style="font-size: 13px; color: #666; margin-top: 25px; line-height: 1.6;">
+                El reporte interactivo incluye mapas Folium para explorar los datos geográficamente, 
+                así como descargas de archivos CSV con información detallada de transiciones y coberturas.
+            </p>
+            
+            <!-- Data Source -->
+            <div style="background-color: #f0f8f4; padding: 15px; border-radius: 4px; margin-top: 20px;">
+                <p style="margin: 0; font-size: 12px; color: #666;">
+                    <strong>Fuente de Datos:</strong> Dynamic World (Google Earth Engine)
+                </p>
+                <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                    Este reporte se genera automáticamente usando datos de clasificación de uso del suelo de alta resolución.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p style="margin: 0;">
+                SIMBYP - Sistema de Monitoreo de Biodiversidad y Páramos
+            </p>
+            <p style="margin: 5px 0 0 0;">
+                <a href="https://simbyp.org">www.simbyp.org</a>
+            </p>
+            <p style="margin: 10px 0 0 0; color: #bbb;">
+                Este es un correo automático. Por favor, no responda a este mensaje.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

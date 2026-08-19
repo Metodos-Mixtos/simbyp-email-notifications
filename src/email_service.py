@@ -309,3 +309,44 @@ class EmailService:
         subject = f"Reporte Mensual - Alertas de Área Construida SIMBYP"
         
         return self.send_email(recipients, subject, html_content)
+    
+    def send_paramos_report(self, recipients: List[str], report_url: str, report_data: Dict = None) -> bool:
+        """
+        Send paramos report email from Dynamic World service.
+        
+        Args:
+            recipients: List of recipient email addresses
+            report_url: URL to the interactive paramos report in GCS
+            report_data: Dictionary with report metadata (title, metadata, etc.)
+        
+        Returns:
+            True if email sent successfully, False otherwise
+        """
+        if not recipients:
+            logger.info("No recipients for paramos report")
+            return False
+        
+        if not report_data:
+            report_data = {}
+        
+        try:
+            template = self.jinja_env.get_template('paramos_report.html')
+            
+            # Prepare template context
+            title = report_data.get('title', 'Reporte de Páramos - SIMBYP')
+            metadata = report_data.get('metadata', {})
+            
+            html_content = template.render(
+                title=title,
+                report_url=report_url,
+                recipient_name='SIMBYP',  # Will be personalized in batch sending if needed
+                metadata=metadata
+            )
+            
+            subject = f"Reporte de Páramos - {title}"
+            
+            return self.send_email(recipients, subject, html_content)
+            
+        except Exception as e:
+            logger.error(f"Error sending paramos report: {e}", exc_info=True)
+            return False

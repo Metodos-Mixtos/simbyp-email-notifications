@@ -660,5 +660,131 @@ def get_next_report_candidates():
         logger.error(f"Error getting next report candidates: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ========================================================================
+# Paramos Reports Endpoints
+# ========================================================================
+
+@app.route('/api/reports/paramos/sync', methods=['POST'])
+def sync_paramos_report():
+    """
+    Trigger synchronization of a paramos report from Dynamic World.
+    
+    Query Parameters:
+        year (int): Year of report (e.g., 2026) - defaults to current year
+        month (int): Month of report (1-12) - defaults to current month
+        token (str): Authentication token (optional for webhook)
+    
+    Returns:
+        {
+            'success': bool,
+            'data': {
+                'report_id': str,
+                'title': str,
+                'url': str,
+                'recipients': int
+            },
+            'error': str (on failure)
+        }
+    """
+    try:
+        # Get year and month from request
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+        
+        # If not provided, use current date
+        if not year or not month:
+            from datetime import datetime
+            today = datetime.today()
+            year = year or today.year
+            month = month or today.month
+        
+        # Validate year and month
+        if not (1900 <= year <= 2100) or not (1 <= month <= 12):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid year or month. Year must be 1900-2100, month 1-12'
+            }), 400
+        
+        from src.database import get_db_session
+        from src.services.paramos_monitor_service import ParamosMonitorService
+        
+        with get_db_session() as session:
+            paramos_service = ParamosMonitorService(session)
+            success, report_id = paramos_service.sync_paramos_report(year, month)
+            
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': f'No new paramos report found for {year}-{month:02d}'
+                }), 404
+            
+            # Get report details
+            report = paramos_service.report_repo.get_report_by_id(UUID(report_id))
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'report_id': report_id,
+                    'title': report.report_title,
+                    'url': report.report_url,
+                    'recipients': report.recipient_count
+                }
+            }), 200
+    
+    except Exception as e:
+        logger.error(f"Error syncing paramos report: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/reports/paramos/latest', methods=['GET'])
+def get_latest_paramos_report():
+    """
+    Get metadata for the latest paramos report.
+    
+    Returns:
+        {
+            'success': bool,
+            'data': {
+                'id': str,
+                'title': str,
+                'url': str,
+                'sent_at': str (ISO format),
+                'recipient_count': int,
+                'status': str
+            },
+            'error': str (on failure)
+        }
+    """
+    try:
+        from src.database import get_db_session
+        from src.services.paramos_monitor_service import ParamosMonitorService
+        
+        with get_db_session() as session:
+            paramos_service = ParamosMonitorService(session)
+            report_data = paramos_service.get_latest_report()
+            
+            if not report_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No paramos reports found'
+                }), 404
+            
+            return jsonify({
+                'success': True,
+                'data': report_data
+            }), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting latest paramos report: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=False)

@@ -18,7 +18,7 @@ class ReportSent(Base):
     
     Attributes:
         id: Unique identifier (UUID)
-        alert_type: Type of alert ('weekly_alerts' or 'monthly_built_area')
+        alert_type: Type of alert ('weekly_alerts', 'monthly_built_area', or 'reporte_paramos')
         report_title: Title of the report
         report_url: GCS path or URL to the report
         report_date: Date the report covers (not when it was sent)
@@ -45,7 +45,7 @@ class ReportSent(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "alert_type IN ('weekly_alerts', 'monthly_built_area')",
+            "alert_type IN ('weekly_alerts', 'monthly_built_area', 'reporte_paramos')",
             name='check_report_alert_type'
         ),
         CheckConstraint(
