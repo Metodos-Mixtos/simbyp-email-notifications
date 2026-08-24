@@ -348,43 +348,37 @@ class EmailService:
 
         return self.send_email(recipients, subject, html_content)
     
-    def send_paramos_report(self, recipients: List[str], report_url: str, report_data: Dict = None) -> bool:
+    def send_paramos_report(self, recipients: List[str], paramos_report: Dict) -> bool:
         """
         Send paramos report email from Dynamic World service.
-        
+
         Args:
             recipients: List of recipient email addresses
-            report_url: URL to the interactive paramos report in GCS
-            report_data: Dictionary with report metadata (title, metadata, etc.)
-        
+            paramos_report: Report payload (DB-backed dict with report_url/metadata,
+                as produced by ParamosMonitorService / ReportRepository)
+
         Returns:
             True if email sent successfully, False otherwise
         """
-        if not recipients:
-            logger.info("No recipients for paramos report")
+        if not paramos_report:
+            logger.info("No paramos report to send")
             return False
-        
-        if not report_data:
-            report_data = {}
-        
-        try:
-            template = self.jinja_env.get_template('paramos_report.html')
-            
-            # Prepare template context
-            title = report_data.get('title', 'Reporte de Páramos - SIMBYP')
-            metadata = report_data.get('metadata', {})
-            
-            html_content = template.render(
-                title=title,
-                report_url=report_url,
-                recipient_name='SIMBYP',  # Will be personalized in batch sending if needed
-                metadata=metadata
-            )
-            
-            subject = f"Reporte de Páramos - {title}"
-            
-            return self.send_email(recipients, subject, html_content)
-            
-        except Exception as e:
-            logger.error(f"Error sending paramos report: {e}", exc_info=True)
-            return False
+
+        report = self._normalize_report_payload(
+            paramos_report,
+            default_title='Reporte de Páramos - SIMBYP'
+        )
+
+        template = self.jinja_env.get_template('paramos_report.html')
+
+        html_content = template.render(
+            title=report['title'],
+            report_url=report['url'],
+            recipient_name='SIMBYP',  # Will be personalized in batch sending if needed
+            report=report,
+            metadata=report['metadata']
+        )
+
+        subject = f"Reporte de Páramos - {report['title']}"
+
+        return self.send_email(recipients, subject, html_content)

@@ -260,6 +260,41 @@ def send_trimestral_alerts():
             'message': str(e)
         }), 500
 
+@app.route('/send-paramos-alerts', methods=['POST'])
+def send_paramos_alerts():
+    """
+    Endpoint to send the latest generated paramos (Dynamic World) report.
+    A report must first be logged via POST /api/reports/paramos/sync.
+    """
+    try:
+        logger.info("Starting paramos alerts report sending")
+
+        from src.database import get_db_session
+        from src.repositories.subscription_repository import SubscriptionRepository
+        from src.repositories.report_repository import ReportRepository
+
+        with get_db_session() as session:
+            report_repo = ReportRepository(session)
+            sub_repo = SubscriptionRepository(session)
+
+            response_body, status_code = send_generated_report_for_type(
+                alert_type='reporte_paramos',
+                report_label='paramos',
+                send_success_message='Paramos report sent successfully',
+                report_repo=report_repo,
+                sub_repo=sub_repo,
+                payload_builder=_report_to_email_payload,
+                send_func=email_service.send_paramos_report,
+            )
+            return jsonify(response_body), status_code
+
+    except Exception as e:
+        logger.error(f"Error in send_paramos_alerts: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 @app.route('/test-alerts', methods=['GET'])
 def test_alerts():
     """Test endpoint to see what would be sent"""
@@ -604,15 +639,15 @@ def get_next_report_candidates():
         from src.repositories.report_repository import ReportRepository
 
         requested_type = request.args.get('alert_type', type=str)
-        allowed_types = {'weekly_alerts', 'monthly_built_area', 'trimestral_alerts'}
+        allowed_types = {'weekly_alerts', 'monthly_built_area', 'trimestral_alerts', 'reporte_paramos'}
 
         if requested_type and requested_type not in allowed_types:
             return jsonify({
                 'success': False,
-                'error': 'Invalid alert_type. Use weekly_alerts, monthly_built_area, or trimestral_alerts'
+                'error': 'Invalid alert_type. Use weekly_alerts, monthly_built_area, trimestral_alerts, or reporte_paramos'
             }), 400
 
-        query_types = [requested_type] if requested_type else ['weekly_alerts', 'monthly_built_area', 'trimestral_alerts']
+        query_types = [requested_type] if requested_type else ['weekly_alerts', 'monthly_built_area', 'trimestral_alerts', 'reporte_paramos']
 
         with get_db_session() as session:
             report_repo = ReportRepository(session)
@@ -642,10 +677,10 @@ def sync_paramos_report():
     Trigger synchronization of a paramos report from Dynamic World.
     
     Query Parameters:
-        year (int): Year of report (e.g., 2026) - defaults to current year
-        month (int): Month of report (1-12) - defaults to current month
+        year (int): Year of report (e.g., 2026) - defaults to previous month's year
+        month (int): Month of report (1-12) - defaults to previous month
         token (str): Authentication token (optional for webhook)
-    
+
     Returns:
         {
             'success': bool,
@@ -662,13 +697,16 @@ def sync_paramos_report():
         # Get year and month from request
         year = request.args.get('year', type=int)
         month = request.args.get('month', type=int)
-        
-        # If not provided, use current date
+
+        # If not provided, default to the previous month: Dynamic World's monthly job
+        # always analyzes and publishes the prior month's data (see run_monthly.py in
+        # simbyp_dynamic_world), so "today" is the wrong default here.
         if not year or not month:
             from datetime import datetime
             today = datetime.today()
-            year = year or today.year
-            month = month or today.month
+            prev_year, prev_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+            year = year or prev_year
+            month = month or prev_month
         
         # Validate year and month
         if not (1900 <= year <= 2100) or not (1 <= month <= 12):

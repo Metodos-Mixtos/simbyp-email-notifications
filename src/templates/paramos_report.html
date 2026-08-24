@@ -185,9 +185,26 @@
             
             <!-- CTA -->
             <div style="text-align: center;">
+                {% if report_url %}
                 <a href="{{ report_url }}" class="cta-button">Ver Reporte Completo</a>
+                {% endif %}
+                {% if report and report.map_url %}
+                <a href="{{ report.map_url }}" class="cta-button">Ver Mapa Interactivo</a>
+                {% endif %}
             </div>
-            
+
+            <!-- File Links Section -->
+            {% if report and report.files %}
+            <div class="section">
+                <div class="section-title">Archivos del Reporte</div>
+                <ul class="paramo-list">
+                    {% for file in report.files %}
+                    <li><a href="{{ file.url }}">{{ file.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
             <!-- Additional Info -->
             <p style="font-size: 13px; color: #666; margin-top: 25px; line-height: 1.6;">
                 El reporte interactivo incluye mapas Folium para explorar los datos geográficamente, 
