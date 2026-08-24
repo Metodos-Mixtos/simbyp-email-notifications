@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reporte Semanal de Alertas SIMBYP</title>
+  <title>Reporte Trimestral de Alertas SIMBYP</title>
   <style>
     body {
       margin: 0;
@@ -78,6 +78,7 @@
       border-radius: 4px;
       font-weight: 600;
       margin-top: 1rem;
+      margin-right: 0.5rem;
       transition: background 0.3s ease;
     }
     .btn:hover {
@@ -87,29 +88,11 @@
       margin: 0.75rem 0;
       line-height: 1.6;
     }
-    @media (max-width: 768px) {
-      body {
-        font-size: 13px;
-      }
-      h1 {
-        font-size: 20px;
-      }
-      h2 {
-        font-size: 16px;
-      }
-      .wrap {
-        padding: 1rem;
-      }
-      .btn {
-        padding: 10px 20px;
-        font-size: 13px;
-      }
-    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Reporte Semanal de Alertas SIMBYP</h1>
+    <h1>Reporte Trimestral de Alertas SIMBYP</h1>
     <div class="subtitle">
       {% if report.start_date and report.end_date %}
       Período: {{ report.start_date }} a {{ report.end_date }}
@@ -120,13 +103,12 @@
       {% endif %}
     </div>
 
-    <h2>Alertas de la Semana</h2>
-    
+    <h2>Alertas Trimestrales GFW</h2>
+
     <div class="card--resaltada">
       <h3>{{ report.title }}</h3>
-      
-      <p><strong>Se ha generado un nuevo reporte con el análisis semanal de alertas de deforestación y cambios de cobertura.</strong></p>
-      
+      <p><strong>Se ha generado un nuevo reporte trimestral con el consolidado de alertas para el periodo.</strong></p>
+
       <div class="meta-info">
         {% if report.start_date and report.end_date %}
         <div class="meta-info-item">
@@ -146,12 +128,10 @@
       </div>
 
       {% if report.url %}
-      <p>Accede al reporte completo con visualizaciones interactivas:</p>
       <a href="{{ report.url }}" class="btn">Ver Reporte Completo</a>
       {% endif %}
 
       {% if report.map_url %}
-      <p>Consulta también el mapa interactivo de alertas:</p>
       <a href="{{ report.map_url }}" class="btn">Ver Mapa Interactivo</a>
       {% endif %}
 

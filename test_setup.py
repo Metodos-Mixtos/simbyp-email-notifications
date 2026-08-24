@@ -7,6 +7,9 @@ Tests that all dependencies are installed and configuration loads correctly.
 import sys
 import os
 
+# This module is a CLI setup utility, not a pytest test module.
+__test__ = False
+
 def test_imports():
     """Test that all required packages are installed."""
     print("\n" + "="*70)

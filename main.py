@@ -18,6 +18,7 @@ from src.gcs_handler import GCSHandler
 from src.alerts_processor import AlertProcessor
 from src.email_service import EmailService
 from src import utils
+from src.services.queued_report_sender import send_generated_report_for_type
 
 app = Flask(__name__, static_folder='src/static', static_url_path='/static', template_folder='src/templates')
 app.config['JSON_SORT_KEYS'] = False
@@ -56,6 +57,7 @@ def _serialize_report_candidate(report) -> dict:
     """Serialize report candidate row for admin/debug queue preview."""
     metadata = report.metadata_json or {}
     files = _extract_metadata_files(metadata)
+    map_url = metadata.get('map_url') if isinstance(metadata, dict) else None
     return {
         'id': str(report.id),
         'alert_type': report.alert_type,
@@ -66,6 +68,7 @@ def _serialize_report_candidate(report) -> dict:
         'status': report.status,
         'files_count': len(files),
         'files': files,
+        'map_url': map_url,
         'metadata': metadata,
     }
 
@@ -160,53 +163,16 @@ def send_weekly_alerts():
             report_repo = ReportRepository(session)
             sub_repo = SubscriptionRepository(session)
 
-            weekly_report_row = report_repo.get_next_generated_report('weekly_alerts')
-            if not weekly_report_row:
-                logger.info("No generated weekly report found to send")
-                return jsonify({
-                    'status': 'skipped',
-                    'message': 'No generated weekly report found',
-                    'report': None
-                }), 200
-
-            recipients = sub_repo.get_recipients_by_alert_type('weekly_alerts')
-
-            if not recipients:
-                logger.warning("No recipients configured for weekly alerts")
-                return jsonify({
-                    'status': 'warning',
-                    'message': 'No recipients configured'
-                }), 200
-
-            weekly_report = _report_to_email_payload(weekly_report_row)
-
-            # Send email with report only
-            success = email_service.send_weekly_report(recipients, weekly_report)
-
-            if success:
-                report_repo.update_report_status(
-                    weekly_report_row.id,
-                    status='sent',
-                    recipient_count=len(recipients),
-                    error_message=None
-                )
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Weekly report sent successfully',
-                    'report': weekly_report_row.report_title,
-                    'recipients': recipients
-                }), 200
-
-            report_repo.update_report_status(
-                weekly_report_row.id,
-                status='failed',
-                recipient_count=0,
-                error_message='Failed to send weekly report email via Microsoft Graph API'
+            response_body, status_code = send_generated_report_for_type(
+                alert_type='weekly_alerts',
+                report_label='weekly',
+                send_success_message='Weekly report sent successfully',
+                report_repo=report_repo,
+                sub_repo=sub_repo,
+                payload_builder=_report_to_email_payload,
+                send_func=email_service.send_weekly_report,
             )
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to send weekly report'
-            }), 500
+            return jsonify(response_body), status_code
     
     except Exception as e:
         logger.error(f"Error in send_weekly_alerts: {str(e)}", exc_info=True)
@@ -234,56 +200,61 @@ def send_monthly_built_area():
             report_repo = ReportRepository(session)
             sub_repo = SubscriptionRepository(session)
 
-            monthly_report_row = report_repo.get_next_generated_report('monthly_built_area')
-            if not monthly_report_row:
-                logger.info("No generated monthly built area report found to send")
-                return jsonify({
-                    'status': 'skipped',
-                    'message': 'No generated monthly built area report found',
-                    'alerts': 0
-                }), 200
-
-            recipients = sub_repo.get_recipients_by_alert_type('monthly_built_area')
-
-            if not recipients:
-                logger.warning("No recipients configured for monthly built area")
-                return jsonify({
-                    'status': 'warning',
-                    'message': 'No recipients configured'
-                }), 200
-
-            alert_data = _report_to_email_payload(monthly_report_row)
-
-            # Send email
-            success = email_service.send_monthly_built_area(recipients, alert_data)
-
-            if success:
-                report_repo.update_report_status(
-                    monthly_report_row.id,
-                    status='sent',
-                    recipient_count=len(recipients),
-                    error_message=None
-                )
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Monthly built area report sent successfully',
-                    'alerts': 1,
-                    'recipients': recipients
-                }), 200
-
-            report_repo.update_report_status(
-                monthly_report_row.id,
-                status='failed',
-                recipient_count=0,
-                error_message='Failed to send monthly built area report email via Microsoft Graph API'
+            response_body, status_code = send_generated_report_for_type(
+                alert_type='monthly_built_area',
+                report_label='monthly built area',
+                send_success_message='Monthly built area report sent successfully',
+                report_repo=report_repo,
+                sub_repo=sub_repo,
+                payload_builder=_report_to_email_payload,
+                send_func=email_service.send_monthly_built_area,
             )
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to send monthly built area report'
-            }), 500
+
+            if response_body.get('status') == 'success':
+                response_body['alerts'] = 1
+            elif response_body.get('status') == 'skipped':
+                response_body['alerts'] = 0
+
+            return jsonify(response_body), status_code
     
     except Exception as e:
         logger.error(f"Error in send_monthly_built_area: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/send-trimestral-alerts', methods=['POST'])
+def send_trimestral_alerts():
+    """
+    Endpoint to send trimestral GFW report.
+    Triggered by Cloud Scheduler for quarterly generated reports.
+    """
+    try:
+        logger.info("Starting trimestral alerts report sending")
+
+        from src.database import get_db_session
+        from src.repositories.subscription_repository import SubscriptionRepository
+        from src.repositories.report_repository import ReportRepository
+
+        with get_db_session() as session:
+            report_repo = ReportRepository(session)
+            sub_repo = SubscriptionRepository(session)
+
+            response_body, status_code = send_generated_report_for_type(
+                alert_type='trimestral_alerts',
+                report_label='trimestral',
+                send_success_message='Trimestral report sent successfully',
+                report_repo=report_repo,
+                sub_repo=sub_repo,
+                payload_builder=_report_to_email_payload,
+                send_func=email_service.send_trimestral_report,
+            )
+            return jsonify(response_body), status_code
+
+    except Exception as e:
+        logger.error(f"Error in send_trimestral_alerts: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -390,7 +361,7 @@ def create_user():
             # Handle subscriptions
             subscriptions = data.get('subscriptions', [])
             for alert_type in subscriptions:
-                if alert_type in ['weekly_alerts', 'monthly_built_area']:
+                if alert_type in ['weekly_alerts', 'monthly_built_area', 'trimestral_alerts', 'reporte_paramos']:
                     sub_repo.subscribe(user.id, alert_type, performed_by='admin_ui')
             
             session.commit()
@@ -483,7 +454,7 @@ def update_user(user_id):
                 
                 # Subscribe to new ones
                 for alert_type in new_subscriptions - current_subscriptions:
-                    if alert_type in ['weekly_alerts', 'monthly_built_area']:
+                    if alert_type in ['weekly_alerts', 'monthly_built_area', 'trimestral_alerts', 'reporte_paramos']:
                         sub_repo.subscribe(user.id, alert_type, performed_by='admin_ui')
                 
                 # Unsubscribe from removed ones
@@ -633,15 +604,15 @@ def get_next_report_candidates():
         from src.repositories.report_repository import ReportRepository
 
         requested_type = request.args.get('alert_type', type=str)
-        allowed_types = {'weekly_alerts', 'monthly_built_area'}
+        allowed_types = {'weekly_alerts', 'monthly_built_area', 'trimestral_alerts'}
 
         if requested_type and requested_type not in allowed_types:
             return jsonify({
                 'success': False,
-                'error': 'Invalid alert_type. Use weekly_alerts or monthly_built_area'
+                'error': 'Invalid alert_type. Use weekly_alerts, monthly_built_area, or trimestral_alerts'
             }), 400
 
-        query_types = [requested_type] if requested_type else ['weekly_alerts', 'monthly_built_area']
+        query_types = [requested_type] if requested_type else ['weekly_alerts', 'monthly_built_area', 'trimestral_alerts']
 
         with get_db_session() as session:
             report_repo = ReportRepository(session)

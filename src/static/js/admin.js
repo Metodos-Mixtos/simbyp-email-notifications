@@ -61,11 +61,13 @@ function renderUsers(users) {
             const labels = {
                 'weekly_alerts': 'Weekly Alerts',
                 'monthly_built_area': 'Monthly Built Area',
+                'trimestral_alerts': 'Quarterly GFW Alerts',
                 'reporte_paramos': 'Paramos Report'
             };
             const colors = {
                 'weekly_alerts': 'primary',
                 'monthly_built_area': 'success',
+                'trimestral_alerts': 'warning',
                 'reporte_paramos': 'info'
             };
             const label = labels[sub] || sub;
@@ -118,6 +120,8 @@ function resetUserForm() {
     document.getElementById('userForm').reset();
     document.getElementById('subWeekly').checked = false;
     document.getElementById('subMonthly').checked = false;
+    document.getElementById('subTrimestral').checked = false;
+    document.getElementById('subParamos').checked = false;
 }
 
 // Edit user
@@ -142,6 +146,7 @@ async function editUser(userId) {
         document.getElementById('userMunicipality').value = user.municipality_code || '';
         document.getElementById('subWeekly').checked = user.subscriptions.includes('weekly_alerts');
         document.getElementById('subMonthly').checked = user.subscriptions.includes('monthly_built_area');
+        document.getElementById('subTrimestral').checked = user.subscriptions.includes('trimestral_alerts');
         document.getElementById('subParamos').checked = user.subscriptions.includes('reporte_paramos');
         
         const modal = new bootstrap.Modal(document.getElementById('userModal'));
@@ -175,6 +180,9 @@ async function saveUser(event) {
     }
     if (document.getElementById('subMonthly').checked) {
         subscriptions.push('monthly_built_area');
+    }
+    if (document.getElementById('subTrimestral').checked) {
+        subscriptions.push('trimestral_alerts');
     }
     if (document.getElementById('subParamos').checked) {
         subscriptions.push('reporte_paramos');

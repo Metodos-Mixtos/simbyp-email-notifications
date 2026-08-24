@@ -39,7 +39,7 @@ Manages user subscriptions to different alert types.
 
 **Constraints:**
 - UNIQUE constraint on `(user_id, alert_type)` - one subscription per user per alert type
-- CHECK constraint on `alert_type IN ('weekly_alerts', 'monthly_built_area')`
+- CHECK constraint on `alert_type IN ('weekly_alerts', 'monthly_built_area', 'trimestral_alerts', 'reporte_paramos')`
 - CASCADE DELETE on user deletion
 
 **Indexes:**
@@ -123,12 +123,14 @@ ORDER BY u.email;
 
 ## Alert Types
 
-The system supports two types of email alerts:
+The system supports four types of email alerts:
 
 | Alert Type | Frequency | Description |
 |------------|-----------|-------------|
 | `weekly_alerts` | Every Tuesday | Deforestation (GFW) + Land Cover (PSA) alerts |
 | `monthly_built_area` | First Friday of month | Built area expansion alerts |
+| `trimestral_alerts` | Quarterly | Consolidated trimestral GFW alerts |
+| `reporte_paramos` | Monthly / on-demand | Dynamic World paramos monitoring report |
 
 ## Entity Relationships
 

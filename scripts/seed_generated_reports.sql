@@ -1,5 +1,5 @@
 -- Seed script for local/staging validation of DB-first email queue behavior.
--- Inserts one generated weekly report and one generated monthly report.
+-- Inserts one generated weekly report, one generated monthly report, and one generated trimestral report.
 
 INSERT INTO reports_sent (
     alert_type,
@@ -34,6 +34,21 @@ INSERT INTO reports_sent (
         'files', jsonb_build_array(
             jsonb_build_object('name', 'Reporte Mensual', 'url', 'gs://reportes-simbyp/urban_sprawl/urban_sprawl_reporte_2026_Mayo.html'),
             jsonb_build_object('name', 'Resumen UPL', 'path', 'urban_sprawl_reporte.json')
+        )
+    )
+), (
+    'trimestral_alerts',
+    'Alertas GFW - Trimestre 2026-Q2',
+    'gs://reportes-simbyp/reportes_gfw/trimestre_2026_q2/reporte_final.html',
+    DATE '2026-06-30',
+    'generated',
+    jsonb_build_object(
+        'start_date', '2026-04-01',
+        'end_date', '2026-06-30',
+        'map_url', 'gs://reportes-simbyp/reportes_gfw/trimestre_2026_q2/mapa_interactivo.html',
+        'files', jsonb_build_array(
+            jsonb_build_object('name', 'Reporte Trimestral', 'url', 'gs://reportes-simbyp/reportes_gfw/trimestre_2026_q2/reporte_final.html'),
+            jsonb_build_object('name', 'Resumen CSV', 'path', 'resumen_q2.csv')
         )
     )
 );

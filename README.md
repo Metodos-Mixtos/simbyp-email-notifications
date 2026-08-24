@@ -6,6 +6,7 @@ A Flask-based email notification system that sends scheduled environmental alert
 
 - **Frequency-Based Alerts**:
   - Weekly email (every Tuesday): Deforestation (GFW) + Land Cover (PSA) alerts
+  - Quarterly email: Trimestral GFW consolidated alerts
   - Monthly email (first Friday): Built area expansion alerts
   - Dynamic World Paramos Reports: Monthly monitoring of paramos ecosystem (on-demand or scheduled)
 - **Cloud Storage Integration**: Reads alert reports from Google Cloud Storage
@@ -41,13 +42,15 @@ src/
 │   └── report_repository.py       # Report operations
 ├── services/                      # Business logic services
 │   ├── batch_import_service.py    # Bulk user/subscription CSV import
-│   └── paramos_monitor_service.py # Dynamic World paramos report monitoring
+│   ├── paramos_monitor_service.py # Dynamic World paramos report monitoring
+│   └── queued_report_sender.py    # Shared generated-report queue sender workflow
 ├── static/
 │   └── js/
 │       └── admin.js               # Admin UI JavaScript
 └── templates/                     # HTML email templates
     ├── built_area_alert.html      # Monthly built area report
     ├── paramos_report.html        # Dynamic World paramos report
+    ├── trimestral_report.html     # Trimestral GFW report template
     ├── weekly_alerts.html         # Weekly deforestation + land cover alerts
     └── weekly_report.html         # Weekly report template
 main.py                            # Flask application and endpoints
@@ -55,7 +58,8 @@ migrations/
 ├── 001_initial_schema.sql         # Users, subscriptions, audit tables
 ├── 002_reports_tracking.sql       # Report tracking tables
 ├── 003_reports_sent_generated_status.sql  # Ensure generated status is allowed
-└── 004_add_paramos_subscription.sql       # Add reporte_paramos alert type
+├── 004_add_paramos_subscription.sql       # Add reporte_paramos alert type
+└── 005_add_trimestral_alert_type.sql      # Add trimestral_alerts alert type
 scripts/
 ├── dev.sh                         # Start proxy + app together (recommended)
 ├── dev-proxy.sh                   # Start Cloud SQL Proxy only
@@ -220,7 +224,14 @@ Apply migration 003 if your environment already had migration 002 applied before
 psql "$DATABASE_URL" -f migrations/003_reports_sent_generated_status.sql
 ```
 
-Seed one weekly and one monthly generated report for end-to-end testing:
+Apply alert type migrations if your environment was provisioned before paramos/trimestral support:
+
+```bash
+psql "$DATABASE_URL" -f migrations/004_add_paramos_subscription.sql
+psql "$DATABASE_URL" -f migrations/005_add_trimestral_alert_type.sql
+```
+
+Seed one weekly, one monthly, and one trimestral generated report for end-to-end testing:
 
 ```bash
 psql "$DATABASE_URL" -f scripts/seed_generated_reports.sql
@@ -232,6 +243,7 @@ Preview the next generated candidate(s) that will be selected for sending:
 curl "http://localhost:8080/api/report-queue/next"
 curl "http://localhost:8080/api/report-queue/next?alert_type=weekly_alerts"
 curl "http://localhost:8080/api/report-queue/next?alert_type=monthly_built_area"
+curl "http://localhost:8080/api/report-queue/next?alert_type=trimestral_alerts"
 ```
 
 ### Accessing the Admin Interface
@@ -290,6 +302,7 @@ The admin interface provides a complete user management system with:
 
 - **Subscription Management**:
   - **Weekly Alerts**: Subscribe users to weekly deforestation and land cover alerts
+  - **Quarterly GFW Alerts**: Subscribe users to trimestral GFW report deliveries
   - **Monthly Built Area**: Subscribe users to monthly built area expansion reports
   - Toggle subscriptions on/off per user
   - Visual badges showing active subscriptions
@@ -327,8 +340,8 @@ The system supports two recipient management modes:
 - Reads recipients from GCS CSV file (default: gs://material-estatico-sdp/...)
 - Simple setup, no database required
 - No admin interface
-- Limited to email and basic flags (weekly_alerts, monthly_built_area)
-- Requires CSV columns: `Correo`, `weekly_alerts`, `monthly_built_area`
+- Limited to email and basic flags (weekly_alerts, monthly_built_area, reporte_paramos)
+- Requires CSV columns: `Correo`, `weekly_alerts`, `monthly_built_area` (plus optional `reporte_paramos`)
 
 To use database mode, ensure migrations are applied and `DATABASE_URL` is configured.
 
@@ -387,6 +400,11 @@ POST /send-weekly-alerts
 
 Fetches the latest weekly alerts report (deforestation + land cover) from GCS and sends to weekly alert recipients. Skips if no report found.
 
+Queue behavior:
+- Selects only the next `generated` row in `reports_sent` with `alert_type='weekly_alerts'`
+- Marks selected row as `sent` on success, `failed` on send failure
+- Resolves recipients from active DB subscriptions for `weekly_alerts`
+
 **Triggering**: Call via Cloud Scheduler every Tuesday at 9 AM UTC:
 ```bash
 gcloud scheduler jobs create http send-weekly-alerts \
@@ -410,8 +428,41 @@ gcloud scheduler jobs create http send-weekly-alerts \
 ```json
 {
   "status": "skipped",
-  "message": "No weekly report found",
+  "message": "No generated weekly report found",
   "report": null
+}
+```
+
+### Send Trimestral Alerts
+
+```bash
+POST /send-trimestral-alerts
+```
+
+Sends the next generated trimestral GFW report from `reports_sent` to active `trimestral_alerts` subscribers.
+
+Queue behavior:
+- Selects only the next `generated` row in `reports_sent` with `alert_type='trimestral_alerts'`
+- Marks selected row as `sent` on success, `failed` on send failure
+- Uses metadata (`files`, `start_date`, `end_date`, `map_url`) to render rich trimestral email content
+
+Suggested Cloud Scheduler setup (quarterly at 09:00 UTC, first day of Jan/Apr/Jul/Oct):
+
+```bash
+gcloud scheduler jobs create http send-trimestral-alerts \
+  --location us-central1 \
+  --schedule "0 9 1 1,4,7,10 *" \
+  --uri "https://your-cloud-run-url/send-trimestral-alerts" \
+  --http-method POST
+```
+
+**Response (success):**
+```json
+{
+  "status": "success",
+  "message": "Trimestral report sent successfully",
+  "report": "Alertas GFW - Trimestre",
+  "recipients": ["user1@example.com", "user2@example.com"]
 }
 ```
 

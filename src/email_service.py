@@ -1,7 +1,8 @@
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
+import posixpath
 from urllib.parse import urljoin
 from jinja2 import Environment, FileSystemLoader
 import requests
@@ -63,12 +64,23 @@ class EmailService:
 
         base = str(report_url).strip()
         if base.startswith('gs://'):
-            base_dir = base.rsplit('/', 1)[0]
-            ref_path = ref.lstrip('/')
-            if '/' in ref_path:
-                # Already includes directory path under bucket
-                return self._to_public_url(f"gs://{base[5:].split('/', 1)[0]}/{ref_path}")
-            return self._to_public_url(f"{base_dir}/{ref_path}")
+            gcs_path = base[5:]
+            parts = gcs_path.split('/', 1)
+            bucket = parts[0]
+            base_obj = parts[1] if len(parts) > 1 else ''
+            base_dir = base_obj.rsplit('/', 1)[0] if '/' in base_obj else ''
+
+            ref_path = ref.lstrip('./').lstrip('/')
+            if ref.startswith('/'):
+                resolved_obj = ref.lstrip('/')
+            elif ref.startswith('../'):
+                resolved_obj = posixpath.normpath(posixpath.join(base_dir, ref))
+            elif '/' in ref_path:
+                resolved_obj = ref_path
+            else:
+                resolved_obj = posixpath.join(base_dir, ref_path) if base_dir else ref_path
+
+            return self._to_public_url(f"gs://{bucket}/{resolved_obj}")
 
         if base.startswith('http://') or base.startswith('https://'):
             base_dir = base.rsplit('/', 1)[0] + '/'
@@ -126,12 +138,12 @@ class EmailService:
         report_url_raw = report_data.get('report_url') or report_data.get('url')
         report_url = self._to_public_url(report_url_raw) if report_url_raw else None
 
-        updated = report_data.get('updated') or report_data.get('sent_at') or datetime.utcnow()
+        updated = report_data.get('updated') or report_data.get('sent_at') or datetime.now(timezone.utc)
         if isinstance(updated, str):
             try:
                 updated = datetime.fromisoformat(updated.replace('Z', '+00:00'))
             except ValueError:
-                updated = datetime.utcnow()
+                updated = datetime.now(timezone.utc)
 
         report_name = report_data.get('report_name')
         if not report_name and report_url_raw:
@@ -140,6 +152,8 @@ class EmailService:
         start_date = report_data.get('start_date') or metadata.get('start_date')
         end_date = report_data.get('end_date') or metadata.get('end_date')
         report_date = report_data.get('report_date')
+        map_url_raw = report_data.get('map_url') or metadata.get('map_url')
+        map_url = self._to_public_url(map_url_raw) if map_url_raw else None
 
         files = self._extract_file_links(metadata, report_url_raw)
         if not files and report_url:
@@ -153,6 +167,7 @@ class EmailService:
             'start_date': start_date,
             'end_date': end_date or report_date,
             'report_date': report_date,
+            'map_url': map_url,
             'top_upls': metadata.get('top_upls', []),
             'files': files,
             'metadata': metadata,
@@ -308,6 +323,29 @@ class EmailService:
         
         subject = f"Reporte Mensual - Alertas de Área Construida SIMBYP"
         
+        return self.send_email(recipients, subject, html_content)
+
+    def send_trimestral_report(self, recipients: List[str], trimestral_report: Dict) -> bool:
+        """Send trimestral GFW report email."""
+        if not trimestral_report:
+            logger.info("No trimestral report to send")
+            return False
+
+        report = self._normalize_report_payload(
+            trimestral_report,
+            default_title='Reporte Trimestral de Alertas GFW SIMBYP'
+        )
+
+        template = self.jinja_env.get_template('trimestral_report.html')
+
+        html_content = template.render(
+            report=report
+        )
+
+        period_start = report.get('start_date') or 'N/A'
+        period_end = report.get('end_date') or 'N/A'
+        subject = f"Reporte Trimestral de Alertas SIMBYP - {period_start} a {period_end}"
+
         return self.send_email(recipients, subject, html_content)
     
     def send_paramos_report(self, recipients: List[str], report_url: str, report_data: Dict = None) -> bool:

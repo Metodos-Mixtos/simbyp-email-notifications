@@ -185,5 +185,78 @@ class TestEmailService(unittest.TestCase):
         self.assertIn('https://storage.googleapis.com/reportes-simbyp/urban_sprawl/urban_sprawl_reporte_2026_Mayo.html', html_content)
         self.assertIn('https://storage.googleapis.com/reportes-simbyp/urban_sprawl/urban_sprawl_reporte.json', html_content)
 
+    def test_normalize_report_payload_supports_map_url_and_file_variants(self):
+        """Payload normalization should support map_url and url/path/public_url file variants."""
+        payload = {
+            'report_title': 'Reporte GFW',
+            'report_url': 'gs://reportes-simbyp/reportes_gfw/q3/reporte_final.html',
+            'metadata': {
+                'start_date': '2026-04-01',
+                'end_date': '2026-06-30',
+                'map_url': 'gs://reportes-simbyp/reportes_gfw/q3/mapa.html',
+                'files': [
+                    {'name': 'Principal', 'url': 'gs://reportes-simbyp/reportes_gfw/q3/reporte_final.html'},
+                    {'name': 'CSV', 'path': 'resumen.csv'},
+                    {'name': 'GeoJSON', 'public_url': 'https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q3/shape.geojson'},
+                ]
+            }
+        }
+
+        normalized = self.email_service._normalize_report_payload(payload, default_title='Fallback')
+
+        self.assertEqual(normalized['start_date'], '2026-04-01')
+        self.assertEqual(normalized['end_date'], '2026-06-30')
+        self.assertEqual(
+            normalized['map_url'],
+            'https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q3/mapa.html'
+        )
+
+        urls = [f['url'] for f in normalized['files']]
+        self.assertIn('https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q3/reporte_final.html', urls)
+        self.assertIn('https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q3/resumen.csv', urls)
+        self.assertIn('https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q3/shape.geojson', urls)
+
+    @patch('src.email_service.requests.post')
+    @patch.object(EmailService, '_get_access_token')
+    def test_send_trimestral_report_renders_file_links_and_map(self, mock_get_token, mock_post):
+        """Trimestral template should render links from metadata.files and map_url."""
+        mock_get_token.return_value = 'fake-access-token'
+
+        mock_response = Mock()
+        mock_response.status_code = 202
+        mock_response.text = ''
+        mock_post.return_value = mock_response
+
+        trimestral_report = {
+            'report_title': 'Trimestre 2 GFW',
+            'report_url': 'gs://reportes-simbyp/reportes_gfw/q2/reporte_final.html',
+            'metadata': {
+                'start_date': '2026-04-01',
+                'end_date': '2026-06-30',
+                'map_url': 'gs://reportes-simbyp/reportes_gfw/q2/mapa_interactivo.html',
+                'files': [
+                    {'name': 'Reporte Principal', 'url': 'gs://reportes-simbyp/reportes_gfw/q2/reporte_final.html'},
+                    {'name': 'Resumen', 'path': 'resumen_q2.csv'}
+                ]
+            }
+        }
+
+        recipients = ['test@example.com']
+        result = self.email_service.send_trimestral_report(recipients, trimestral_report)
+
+        self.assertTrue(result)
+        mock_post.assert_called_once()
+
+        request_payload = mock_post.call_args.kwargs['json']
+        html_content = request_payload['message']['body']['content']
+
+        self.assertIn('Reporte Trimestral de Alertas SIMBYP', html_content)
+        self.assertIn('Reporte Principal', html_content)
+        self.assertIn('Resumen', html_content)
+        self.assertIn('Ver Mapa Interactivo', html_content)
+        self.assertIn('https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q2/reporte_final.html', html_content)
+        self.assertIn('https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q2/resumen_q2.csv', html_content)
+        self.assertIn('https://storage.googleapis.com/reportes-simbyp/reportes_gfw/q2/mapa_interactivo.html', html_content)
+
 if __name__ == '__main__':
     unittest.main()
