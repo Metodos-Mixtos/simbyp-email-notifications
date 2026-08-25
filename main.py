@@ -185,17 +185,25 @@ def send_weekly_alerts():
 def send_monthly_built_area():
     """
     Endpoint to send monthly built area report.
-    Triggered by Cloud Scheduler daily, but only sends on first Friday of month.
-    Skips if no alerts found.
+    Triggered by Cloud Scheduler every Friday, but only sends on the first Friday of the month.
+    Skips if no generated report is queued.
     """
     try:
+        if not utils.is_first_friday_of_month():
+            logger.info("Skipping monthly built area report: not the first Friday of the month")
+            return jsonify({
+                'status': 'skipped',
+                'message': 'Not the first Friday of the month',
+                'alerts': 0,
+            }), 200
+
         logger.info("Starting monthly built area report sending")
 
         # Get report candidate and recipients from database
         from src.database import get_db_session
         from src.repositories.subscription_repository import SubscriptionRepository
         from src.repositories.report_repository import ReportRepository
-        
+
         with get_db_session() as session:
             report_repo = ReportRepository(session)
             sub_repo = SubscriptionRepository(session)
