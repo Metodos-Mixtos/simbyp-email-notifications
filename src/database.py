@@ -8,7 +8,7 @@ import os
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine, event, pool
+from sqlalchemy import create_engine, event, pool, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.engine import Engine
 
@@ -122,7 +122,7 @@ def check_db_health() -> tuple[bool, str]:
         
         # Test connection with a simple query
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1").scalar()
+            result = conn.execute(text("SELECT 1")).scalar()
             if result == 1:
                 return True, "Database connection healthy"
             else:
