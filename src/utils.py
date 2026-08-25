@@ -1,12 +1,13 @@
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 def is_first_friday_of_month(date: datetime = None) -> bool:
     """Check if given date is the first Friday of its month"""
     if date is None:
-        date = datetime.now()
+        date = datetime.now(ZoneInfo('America/Bogota'))
     
     # Friday is weekday 4 (Monday=0)
     if date.weekday() != 4:
