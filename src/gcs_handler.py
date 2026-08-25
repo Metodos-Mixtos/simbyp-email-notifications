@@ -9,16 +9,6 @@ logger = logging.getLogger(__name__)
 class GCSHandler:
     def __init__(self, project_id: str):
         self.client = storage.Client(project=project_id)
-
-    def blob_exists(self, bucket_name: str, blob_name: str) -> bool:
-        """Return whether a blob exists in GCS."""
-        try:
-            bucket = self.client.bucket(bucket_name)
-            blob = bucket.blob(blob_name)
-            return blob.exists()
-        except Exception as e:
-            logger.error(f"Error checking existence for {bucket_name}/{blob_name}: {str(e)}")
-            return False
     
     def list_recent_reports(self, bucket_name: str, prefix: str, days_back: int = 7) -> List[Dict]:
         """List HTML reports from the last N days"""
