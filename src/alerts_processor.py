@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from src.gcs_handler import GCSHandler
 from src.config import GCS_BUCKETS, GCS_PREFIXES, DAYS_BACK
@@ -146,64 +146,37 @@ class AlertProcessor:
             return None
     
     def get_area_construida_alerts(self, days_back: int) -> List[Dict]:
-        """Get built area alerts - returns latest urban_sprawl_reporte and its data"""
+        """Get built area alerts using the previous month's report in YYYY_MM format."""
         prefix = GCS_PREFIXES.get('area_construida', 'urban_sprawl/')
-        reports = self.gcs.list_recent_reports(self.bucket, prefix, days_back)
-        
-        # Filter for only urban_sprawl_reporte_*.html files
-        filtered_reports = [r for r in reports if 'urban_sprawl_reporte_' in r['name'] and r['name'].endswith('.html')]
-        
-        if not filtered_reports:
-            logger.info("No urban_sprawl_reporte files found")
+        now = datetime.now()
+        previous_month = (now.replace(day=1) - timedelta(days=1)).strftime('%Y_%m')
+
+        report_path = f"{prefix}{previous_month}/reportes/urban_sprawl_reporte_{previous_month}.html"
+        logger.info(f"Looking for monthly built area report at: {report_path}")
+
+        report_metadata = self.gcs.get_blob_metadata(self.bucket, report_path)
+        if not report_metadata:
+            logger.info(f"No monthly built area report found for period {previous_month}")
             return []
-        
-        # Sort by filename date (YYYY_MESNAME) to get the latest report
-        # Expected format: urban_sprawl_reporte_YYYY_MESNAME.html
-        def extract_date_from_filename(report):
-            filename = report['name'].split('/')[-1]
-            # Extract YYYY_MESNAME from urban_sprawl_reporte_YYYY_MESNAME.html
-            match = re.search(r'(\d{4})_(\w+)', filename)
-            if match:
-                year, month = match.groups()
-                # Create sortable key: year as int + month name (alphabetically)
-                # We'll use month_name for sorting, with year priority
-                return (int(year), month)
-            return (0, '')
-        
-        # Sort by year (desc) then by month name for reports in same year
-        months_order = {
-            'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4, 'Mayo': 5,
-            'Junio': 6, 'Julio': 7, 'Agosto': 8, 'Septiembre': 9,
-            'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12
-        }
-        
-        def sort_key(report):
-            year, month = extract_date_from_filename(report)
-            month_num = months_order.get(month, 0)
-            return (year, month_num)
-        
-        sorted_reports = sorted(filtered_reports, key=sort_key, reverse=True)
-        latest_report = sorted_reports[0]
-        
-        logger.info(f"Selected latest report: {latest_report['name']}")
-        
+
         # Try to find and read the JSON data file in the same directory
-        report_dir = '/'.join(latest_report['name'].split('/')[:-1])
+        report_dir = f"{prefix}{previous_month}/reportes"
         json_file_path = f"{report_dir}/urban_sprawl_reporte.json"
-        
+
         logger.info(f"Looking for JSON file at: {json_file_path}")
         json_data = self.gcs.download_json(self.bucket, json_file_path)
-        
+
         # Extract TOP_UPLS from JSON
         top_upls = json_data.get('TOP_UPLS', []) if json_data else []
-        
+
         alert = {
             'type': 'area_construida',
-            'report_name': latest_report['name'].split('/')[-1],
-            'updated': latest_report['updated'],
-            'url': latest_report['public_url'],
+            'report_name': report_metadata['name'].split('/')[-1],
+            'updated': report_metadata['updated'],
+            'url': report_metadata['public_url'],
             'title': "Reporte Mensual de Área Construida",
+            'period': previous_month,
             'top_upls': top_upls
         }
-        
+
         return [alert]
