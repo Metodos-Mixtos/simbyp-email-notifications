@@ -24,7 +24,7 @@ class ReportSent(Base):
         report_date: Date the report covers (not when it was sent)
         sent_at: Timestamp when report was sent
         recipient_count: Number of recipients
-        status: Overall status ('sent', 'failed', 'partial')
+        status: Overall status ('generated', 'sent', 'failed', 'partial', 'skipped')
         error_message: Error details if failed
         metadata: Additional metadata (alert counts, sources, etc.)
         recipients: Relationship to ReportRecipient objects
@@ -49,7 +49,7 @@ class ReportSent(Base):
             name='check_report_alert_type'
         ),
         CheckConstraint(
-            "status IN ('generated', 'sent', 'failed', 'partial')",
+            "status IN ('generated', 'sent', 'failed', 'partial', 'skipped')",
             name='check_report_status'
         ),
     )

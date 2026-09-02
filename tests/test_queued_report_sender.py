@@ -79,6 +79,41 @@ class TestQueuedReportSender(unittest.TestCase):
         self.assertEqual(kwargs['recipient_count'], 0)
         self.assertIn('trimestral_alerts', kwargs['error_message'])
 
+    def test_skips_when_skip_reason_predicate_matches(self):
+        report = self._build_report('weekly_alerts')
+        report_repo = Mock()
+        report_repo.get_next_generated_report.return_value = report
+
+        sub_repo = Mock()
+        payload_builder = Mock(return_value={'metadata': {'alerts_count': 0}})
+        send_func = Mock()
+
+        response, status_code = send_generated_report_for_type(
+            alert_type='weekly_alerts',
+            report_label='weekly',
+            send_success_message='Weekly report sent successfully',
+            report_repo=report_repo,
+            sub_repo=sub_repo,
+            payload_builder=payload_builder,
+            send_func=send_func,
+            skip_reason=lambda payload: (
+                'No deforestation alerts detected for this period'
+                if (payload.get('metadata') or {}).get('alerts_count') == 0
+                else None
+            ),
+        )
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(response['status'], 'skipped')
+        send_func.assert_not_called()
+        sub_repo.get_recipients_by_alert_type.assert_not_called()
+        report_repo.update_report_status.assert_called_once_with(
+            report.id,
+            status='skipped',
+            recipient_count=0,
+            error_message='No deforestation alerts detected for this period',
+        )
+
     def test_skips_when_no_generated_report(self):
         report_repo = Mock()
         report_repo.get_next_generated_report.return_value = None

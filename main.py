@@ -40,6 +40,20 @@ def _report_to_email_payload(report) -> dict:
     }
 
 
+def _no_gfw_alerts_skip_reason(payload: dict) -> str | None:
+    """Skip predicate for GFW reports (weekly/trimestral) generated with zero alerts.
+
+    simbyp-gfw-alerts always generates and logs a report even when no
+    deforestation alerts were found for the period, so the queue would
+    otherwise send an email whose linked report just says "no alerts".
+    """
+    metadata = payload.get('metadata') or {}
+    alerts_count = metadata.get('alerts_count')
+    if alerts_count == 0:
+        return 'No deforestation alerts detected for this period'
+    return None
+
+
 def _extract_metadata_files(metadata: dict) -> list:
     """Extract file list candidates from known metadata keys for preview responses."""
     if not isinstance(metadata, dict):
@@ -171,6 +185,7 @@ def send_weekly_alerts():
                 sub_repo=sub_repo,
                 payload_builder=_report_to_email_payload,
                 send_func=email_service.send_weekly_report,
+                skip_reason=_no_gfw_alerts_skip_reason,
             )
             return jsonify(response_body), status_code
     
@@ -258,6 +273,7 @@ def send_trimestral_alerts():
                 sub_repo=sub_repo,
                 payload_builder=_report_to_email_payload,
                 send_func=email_service.send_trimestral_report,
+                skip_reason=_no_gfw_alerts_skip_reason,
             )
             return jsonify(response_body), status_code
 
