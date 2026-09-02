@@ -2,6 +2,12 @@
 
 A Flask-based email notification system that sends scheduled environmental alerts including deforestation, built area expansion, and land cover changes. Alerts are triggered on a frequency-based schedule, read from Google Cloud Storage, and delivered via Microsoft Graph API (Office 365/Microsoft 365).
 
+## Architecture Diagram
+
+![simbyp-email-notifications architecture](docs/architecture-preview.png)
+
+Interactive diagram (zoom, themes, export): [`docs/architecture.html`](docs/architecture.html) — generated with [Archify](https://github.com/tt-a1i/archify).
+
 ## Features
 
 - **Frequency-Based Alerts**:
