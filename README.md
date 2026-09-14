@@ -478,35 +478,103 @@ gcloud scheduler jobs create http send-trimestral-alerts \
 POST /send-monthly-built-area
 ```
 
-Fetches built area alerts from GCS and sends to monthly built area recipients. Only sends on the first Friday of each month. Skips if no alerts found.
+Sends the next `status='generated'` report queued in `reports_sent` for `monthly_built_area` to subscribed recipients. Only sends on the first Friday of each month (`utils.is_first_friday_of_month()`); otherwise it skips. It also skips (still `HTTP 200`) if no `generated` report is queued — which is why `/api/reports/built-area/sync` (below) must run and successfully queue a report *before* the first Friday, or this endpoint has nothing to send.
 
-**Triggering**: Call via Cloud Scheduler on the first Friday of each month at 9 AM UTC:
+**Triggering**: Call via Cloud Scheduler every Friday at 9 AM UTC (the endpoint itself filters out non-first Fridays):
 ```bash
 gcloud scheduler jobs create http send-monthly-built-area \
   --location us-central1 \
-  --schedule "0 9 1-7 * FRI" \
+  --schedule "0 9 * * FRI" \
   --uri "https://your-cloud-run-url/send-monthly-built-area" \
   --http-method POST
 ```
 
-The cron expression `0 9 1-7 * FRI` ensures the job runs only on Fridays within the first 7 days of the month.
+Note: an earlier version of this doc used `0 9 1-7 * FRI`, intending "Fridays within the first 7 days of the month". Standard cron treats day-of-month and day-of-week as OR when both are restricted, so that expression actually fires on every day 1-7 *and* every Friday of the month — harmless here only because `is_first_friday_of_month()` filters the extra invocations at the application level. Plain `* * FRI` triggers weekly (as the endpoint expects) without relying on that OR quirk.
 
-**Response (with alerts):**
+**Response (report sent):**
 ```json
 {
   "status": "success",
   "message": "Monthly built area report sent successfully",
   "alerts": 1,
+  "report": "Reporte Mensual de Área Construida - Agosto 2026",
   "recipients": ["admin@example.com"]
 }
 ```
 
-**Response (no alerts):**
+**Response (nothing queued, or not the first Friday):**
 ```json
 {
   "status": "skipped",
-  "message": "No built area alerts found",
+  "message": "No generated monthly built area report found",
   "alerts": 0
+}
+```
+
+### Monthly Built Area Report Sync
+
+```bash
+POST /api/reports/built-area/sync?year=2026&month=8
+```
+
+Triggers synchronization of the monthly built area (urban sprawl) report produced by `simbyp_area_construida`. Detects the report in GCS (`urban_sprawl/{year}_{month}/reportes/urban_sprawl_reporte_{year}_{month}.html`), parses its metadata JSON sidecar if present, and logs it to `reports_sent` with `status='generated'` so `/send-monthly-built-area` can pick it up on the next first Friday. Safe to call more than once for the same period — it skips if a report for that month is already queued or sent.
+
+**Parameters:**
+- `year` (optional): Year of report (defaults to previous month's year)
+- `month` (optional): Month of report 1-12 (defaults to previous month)
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "data": {
+    "report_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Reporte Mensual de Área Construida - Agosto 2026",
+    "url": "https://storage.googleapis.com/reportes-simbyp/urban_sprawl/2026_08/reportes/urban_sprawl_reporte_2026_08.html"
+  }
+}
+```
+
+**Response (no new report):**
+```json
+{
+  "success": false,
+  "error": "No new built area report found for 2026-08"
+}
+```
+
+**Cloud Scheduler Setup**: this endpoint only writes a queue row (cheap GCS check + one DB insert, no Earth Engine work), so it's safe to poll several times across the first week of the month rather than picking one fixed day and hoping `simbyp_area_construida`'s job (which runs on the 1st, see its `setup_scheduler.sh`) has finished uploading by then. Polling every 6 hours through day 7 means the queue is populated as soon as the report actually lands, however long generation takes that month — including the edge case where the 1st itself is the first Friday, which a single once-a-month sync could miss entirely:
+```bash
+gcloud scheduler jobs create http built-area-sync \
+  --location us-central1 \
+  --schedule "0 */6 1-7 * *" \
+  --uri "https://your-cloud-run-url/api/reports/built-area/sync" \
+  --http-method POST
+```
+
+This only affects when the report becomes *available to send* — it never sends anything itself. The actual email only goes out from `/send-monthly-built-area`, and only on the real first Friday (see below): that check is `date.weekday() != 4` in `src/utils.py`, so it is structurally impossible for it to fire on a Sunday or any other day, regardless of how often this sync job runs.
+
+#### Get Latest Built Area Report
+
+```bash
+GET /api/reports/built-area/latest
+```
+
+Retrieves metadata for the most recently logged built area report.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Reporte Mensual de Área Construida - Agosto 2026",
+    "url": "https://storage.googleapis.com/reportes-simbyp/urban_sprawl/2026_08/reportes/urban_sprawl_reporte_2026_08.html",
+    "report_date": "2026-08-01",
+    "sent_at": "2026-09-04T09:00:03",
+    "recipient_count": 12,
+    "status": "sent"
+  }
 }
 ```
 

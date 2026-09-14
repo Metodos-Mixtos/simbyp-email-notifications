@@ -692,6 +692,131 @@ def get_next_report_candidates():
 
 
 # ========================================================================
+# Built Area Reports Endpoints
+# ========================================================================
+
+@app.route('/api/reports/built-area/sync', methods=['POST'])
+def sync_built_area_report():
+    """
+    Trigger synchronization of a monthly built area report from simbyp_area_construida.
+
+    Query Parameters:
+        year (int): Year of report (e.g., 2026) - defaults to previous month's year
+        month (int): Month of report (1-12) - defaults to previous month
+
+    Returns:
+        {
+            'success': bool,
+            'data': {
+                'report_id': str,
+                'title': str,
+                'url': str
+            },
+            'error': str (on failure)
+        }
+    """
+    try:
+        # Get year and month from request
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+
+        # If not provided, default to the previous month: simbyp_area_construida
+        # always analyzes and publishes the prior month's data.
+        if not year or not month:
+            from datetime import datetime
+            today = datetime.today()
+            prev_year, prev_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+            year = year or prev_year
+            month = month or prev_month
+
+        # Validate year and month
+        if not (1900 <= year <= 2100) or not (1 <= month <= 12):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid year or month. Year must be 1900-2100, month 1-12'
+            }), 400
+
+        from src.database import get_db_session
+        from src.services.built_area_monitor_service import BuiltAreaMonitorService
+
+        with get_db_session() as session:
+            built_area_service = BuiltAreaMonitorService(session)
+            success, report_id = built_area_service.sync_built_area_report(year, month)
+
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': f'No new built area report found for {year}-{month:02d}'
+                }), 404
+
+            from uuid import UUID
+            report = built_area_service.report_repo.get_report_by_id(UUID(report_id))
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'report_id': report_id,
+                    'title': report.report_title,
+                    'url': report.report_url,
+                }
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Error syncing built area report: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/reports/built-area/latest', methods=['GET'])
+def get_latest_built_area_report():
+    """
+    Get metadata for the latest built area report.
+
+    Returns:
+        {
+            'success': bool,
+            'data': {
+                'id': str,
+                'title': str,
+                'url': str,
+                'report_date': str (ISO format),
+                'sent_at': str (ISO format),
+                'recipient_count': int,
+                'status': str
+            },
+            'error': str (on failure)
+        }
+    """
+    try:
+        from src.database import get_db_session
+        from src.services.built_area_monitor_service import BuiltAreaMonitorService
+
+        with get_db_session() as session:
+            built_area_service = BuiltAreaMonitorService(session)
+            report_data = built_area_service.get_latest_report()
+
+            if not report_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No built area reports found'
+                }), 404
+
+            return jsonify({
+                'success': True,
+                'data': report_data
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting latest built area report: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ========================================================================
 # Paramos Reports Endpoints
 # ========================================================================
 
