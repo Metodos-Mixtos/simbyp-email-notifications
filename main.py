@@ -202,15 +202,25 @@ def send_monthly_built_area():
     Endpoint to send monthly built area report.
     Triggered by Cloud Scheduler every Friday, but only sends on the first Friday of the month.
     Skips if no generated report is queued.
+
+    Pass ?force=true to bypass the first-Friday check for a deliberate,
+    manually-triggered catch-up send (e.g. a month whose report was queued
+    late). This does not change the automatic Cloud Scheduler behavior,
+    which never sends this parameter.
     """
     try:
-        if not utils.is_first_friday_of_month():
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        if not force and not utils.is_first_friday_of_month():
             logger.info("Skipping monthly built area report: not the first Friday of the month")
             return jsonify({
                 'status': 'skipped',
                 'message': 'Not the first Friday of the month',
                 'alerts': 0,
             }), 200
+
+        if force:
+            logger.warning("Sending monthly built area report via manual force=true override (bypassing first-Friday check)")
 
         logger.info("Starting monthly built area report sending")
 
