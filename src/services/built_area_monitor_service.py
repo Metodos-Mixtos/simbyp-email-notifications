@@ -113,21 +113,28 @@ class BuiltAreaMonitorService:
             logger.error(f"Error parsing built area metadata: {e}")
             return None
 
-    def has_queued_report(self, year: int, month: int) -> bool:
+    def has_queued_report(self, report_url: str) -> bool:
         """
-        Check whether a report for this period has already been generated/sent,
-        so sync doesn't enqueue duplicates when run more than once a month.
+        Check whether this exact report (same GCS url) has already been
+        generated/sent, so sync doesn't enqueue duplicates when run more than
+        once for the same period.
+
+        Deliberately keyed on report_url rather than report_date/alert_type:
+        a report_date collision alone isn't proof this report went out (e.g.
+        an unrelated or mislabeled row from before this sync existed could
+        share the same month), and that would permanently block the real
+        report for that period. The URL is a deterministic, one-to-one
+        stand-in for "this specific generated report".
 
         Args:
-            year: Year (e.g., 2026)
-            month: Month (1-12)
+            report_url: URL of the report in GCS
 
         Returns:
-            True if a generated/sent report already exists for this period
+            True if a generated/sent report already exists with this URL
         """
         stmt = select(ReportSent).where(and_(
             ReportSent.alert_type == 'monthly_built_area',
-            ReportSent.report_date == date(year, month, 1),
+            ReportSent.report_url == report_url,
             ReportSent.status.in_(['generated', 'sent']),
         ))
         return self.session.execute(stmt).scalar_one_or_none() is not None
@@ -185,13 +192,13 @@ class BuiltAreaMonitorService:
             Tuple of (success, report_id)
         """
         try:
-            if self.has_queued_report(year, month):
-                logger.info(f"Built area report for {year}-{month:02d} already queued/sent, skipping")
-                return False, None
-
             report_found, report_url = self.check_for_new_report(year, month)
             if not report_found or not report_url:
                 logger.info(f"No new built area report for {year}-{month:02d}")
+                return False, None
+
+            if self.has_queued_report(report_url):
+                logger.info(f"Built area report {report_url} already queued/sent, skipping")
                 return False, None
 
             metadata = self.parse_report_metadata(year, month)
