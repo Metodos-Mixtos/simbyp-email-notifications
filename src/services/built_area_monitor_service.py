@@ -179,7 +179,7 @@ class BuiltAreaMonitorService:
             logger.error(f"Error logging built area report: {e}")
             return False, None
 
-    def sync_built_area_report(self, year: int, month: int) -> Tuple[bool, Optional[str]]:
+    def sync_built_area_report(self, year: int, month: int, force: bool = False) -> Tuple[bool, Optional[str]]:
         """
         Complete workflow: check for report, skip if already queued, parse
         metadata, log to DB, return report_id.
@@ -187,6 +187,8 @@ class BuiltAreaMonitorService:
         Args:
             year: Year (e.g., 2026)
             month: Month (1-12)
+            force: Re-queue even if this exact report_url was already
+                generated/sent, for a deliberate manual re-send.
 
         Returns:
             Tuple of (success, report_id)
@@ -197,9 +199,12 @@ class BuiltAreaMonitorService:
                 logger.info(f"No new built area report for {year}-{month:02d}")
                 return False, None
 
-            if self.has_queued_report(report_url):
+            if not force and self.has_queued_report(report_url):
                 logger.info(f"Built area report {report_url} already queued/sent, skipping")
                 return False, None
+
+            if force:
+                logger.warning(f"Re-queueing built area report {report_url} via manual force=true override")
 
             metadata = self.parse_report_metadata(year, month)
 

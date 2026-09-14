@@ -713,6 +713,8 @@ def sync_built_area_report():
     Query Parameters:
         year (int): Year of report (e.g., 2026) - defaults to previous month's year
         month (int): Month of report (1-12) - defaults to previous month
+        force (bool): Re-queue even if this exact report was already
+            generated/sent, for a deliberate manual re-send. Default false.
 
     Returns:
         {
@@ -746,12 +748,14 @@ def sync_built_area_report():
                 'error': 'Invalid year or month. Year must be 1900-2100, month 1-12'
             }), 400
 
+        force = request.args.get('force', 'false').lower() == 'true'
+
         from src.database import get_db_session
         from src.services.built_area_monitor_service import BuiltAreaMonitorService
 
         with get_db_session() as session:
             built_area_service = BuiltAreaMonitorService(session)
-            success, report_id = built_area_service.sync_built_area_report(year, month)
+            success, report_id = built_area_service.sync_built_area_report(year, month, force=force)
 
             if not success:
                 return jsonify({
