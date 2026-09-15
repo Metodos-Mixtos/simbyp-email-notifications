@@ -367,17 +367,15 @@
                         <tr>
                             <th>UPL (Unidad de Planeamiento Local)</th>
                             <th>Área Intersectada (ha)</th>
-                            <th>Área Intersectada Estricta (ha)</th>
                             <th>Área Total (ha)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for upl in top_upls %}
                         <tr>
-                            <td>{{ upl.UPL }}</td>
-                            <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA) }}</span></td>
-                            <td><span class="ha-value">{{ "%.2f"|format(upl.INTER_HA_STRICT) }}</span></td>
-                            <td><span class="ha-value">{{ "%.2f"|format(upl.TOTAL_HA) }}</span></td>
+                            <td>{{ upl.NOMBRE }}</td>
+                            <td><span class="ha-value">{{ "%.2f"|format(upl.interseccion_ha) }}</span></td>
+                            <td><span class="ha-value">{{ "%.2f"|format(upl.total_ha) }}</span></td>
                         </tr>
                         {% endfor %}
                     </tbody>

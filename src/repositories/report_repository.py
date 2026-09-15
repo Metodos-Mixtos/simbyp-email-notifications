@@ -162,7 +162,7 @@ class ReportRepository:
             .options(joinedload(ReportSent.recipients))
             .where(ReportSent.id == report_id)
         )
-        return self.session.execute(stmt).scalar_one_or_none()
+        return self.session.execute(stmt).unique().scalar_one_or_none()
     
     def list_recent_reports(self, days: int = 30, limit: int = 50) -> List[ReportSent]:
         """
